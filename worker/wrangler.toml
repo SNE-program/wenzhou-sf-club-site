@@ -1,0 +1,14 @@
+name = "wzsf-site-api"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+# 部署前填写数据库 id（从 Notion 页面 URL 中复制）
+[vars]
+DB_SITE = "3b339fd6-4004-81d9-b672-cda022e565bb"
+DB_ACTIVITIES = "3b339fd6-4004-8157-9ea2-c126459645f4"
+DB_WORKS = "3b339fd6-4004-8111-aac9-cf77c0c99eab"
+DB_MEMBERS = "3b339fd6-4004-81a1-a3a5-f3933823fcd6"
+
+# NOTION_TOKEN 属于密钥，请用以下命令注入（不要写进本文件）：
+#   npx wrangler secret put NOTION_TOKEN

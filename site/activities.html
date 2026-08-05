@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>活动 · 温州中学科学及幻想文学社</title>
+  <meta name="description" content="社团活动一览：招新、读书会、观星、征文比赛……">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>社团活动</h1>
+      <div class="sub">招新、读书会、观星夜、征文比赛…… 与我们共赴想象力的远征。</div>
+    </div>
+
+    <div class="grid" id="activities">
+      <div class="state"><div class="spinner"></div>正在加载活动……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    (async function () {
+      const acts = await fetchSection("activities");
+      document.querySelector("#activities").innerHTML = acts.length
+        ? acts.map((it) => `
+          <article class="card">
+            <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
+            <div class="card-body">
+              <h3>${esc(it.title)}</h3>
+              <p>${esc(it.summary)}</p>
+              <div class="card-meta">
+                <span>${esc(dateLabel(it.date))}</span>
+                ${it.location ? `<span>${esc(it.location)}</span>` : ""}
+                ${it.tags && it.tags.length ? it.tags.map((t) => `<span>#${esc(t)}</span>`).join("") : ""}
+              </div>
+            </div>
+          </article>`).join("")
+        : `<div class="state">暂无活动，敬请期待</div>`;
+    })().catch((e) => {
+      document.querySelector("#activities").innerHTML = `<div class="state">活动加载失败，请稍后刷新重试。</div>`;
+      console.error(e);
+    });
+  </script>
+</body>
+</html>

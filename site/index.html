@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>温州中学科学及幻想文学社</title>
+  <meta name="description" content="温州中学科学及幻想文学社 —— 读科幻、写幻想、观星象、聊未来。">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <!-- 英雄区 -->
+    <section class="hero" id="hero">
+      <h1><span id="hero-name">温州中学科学及幻想文学社</span></h1>
+      <p id="hero-intro">正在载入社团简介……</p>
+    </section>
+
+    <!-- 最新活动 -->
+    <h2 class="section-title">近期活动</h2>
+    <div class="grid" id="activities">
+      <div class="state"><div class="spinner"></div>正在加载活动……</div>
+    </div>
+    <p style="margin-top:1rem"><a class="btn ghost" href="activities.html">查看全部活动 →</a></p>
+
+    <!-- 精选作品 -->
+    <h2 class="section-title">社员作品</h2>
+    <div class="grid" id="works">
+      <div class="state"><div class="spinner"></div>正在加载作品……</div>
+    </div>
+    <p style="margin-top:1rem"><a class="btn ghost" href="works.html">查看全部作品 →</a></p>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    (async function () {
+      // 站点信息
+      try {
+        const site = await fetchSection("site");
+        const nameEl = document.querySelector("#hero-name");
+        const introEl = document.querySelector("#hero-intro");
+        if (site.name) nameEl.textContent = site.name;
+        introEl.textContent = site.intro || introEl.textContent;
+        document.title = (site.name || document.title) + " · 温中科幻社";
+      } catch (e) { console.warn(e); }
+
+      // 近期活动（取前 3 条）
+      try {
+        const acts = (await fetchSection("activities")).slice(0, 3);
+        document.querySelector("#activities").innerHTML = acts.length
+          ? acts.map((it) => `
+            <article class="card">
+              <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
+              <div class="card-body">
+                <h3>${esc(it.title)}</h3>
+                <p>${esc(it.summary)}</p>
+                <div class="card-meta">
+                  <span>${esc(dateLabel(it.date))}</span>
+                  ${it.location ? `<span>${esc(it.location)}</span>` : ""}
+                </div>
+              </div>
+            </article>`).join("")
+          : `<div class="state">暂无活动，敬请期待</div>`;
+      } catch (e) { console.warn(e); }
+
+      // 精选作品（取前 3 条）
+      try {
+        const works = (await fetchSection("works")).slice(0, 3);
+        document.querySelector("#works").innerHTML = works.length
+          ? works.map((it) => `
+            <article class="card">
+              <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
+              <div class="card-body">
+                <h3>${esc(it.title)}</h3>
+                <p>${esc(it.summary)}</p>
+                <div class="card-meta">
+                  <span>${esc(it.category || "未分类")}</span>
+                  ${it.author ? `<span>${esc(it.author)}</span>` : ""}
+                </div>
+              </div>
+            </article>`).join("")
+          : `<div class="state">暂无作品，期待你的投稿</div>`;
+      } catch (e) { console.warn(e); }
+    })();
+  </script>
+</body>
+</html>

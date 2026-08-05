@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>关于 · 温州中学科学及幻想文学社</title>
+  <meta name="description" content="关于我们：社团简介、部门构成与加入方式。">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>关于我们</h1>
+    </div>
+
+    <div class="prose">
+      <h2 class="section-title">社团简介</h2>
+      <p id="about-intro">正在载入……</p>
+
+      <h2 class="section-title">我们在做什么</h2>
+      <p><strong>读</strong>：科幻经典共读与自由讨论；</p>
+      <p><strong>写</strong>：原创科幻征文、社刊与作品集；</p>
+      <p><strong>看</strong>：观星观测、科技馆参观与影视沙龙；</p>
+      <p><strong>聊</strong>：从硬核设定到天马行空，无所不聊。</p>
+
+      <h2 class="section-title">加入我们</h2>
+      <p>招新通常于每学期初进行，无需任何门槛——只要你对科学或幻想保有好奇心。欢迎在招新开放日来我们的展位，或直接通过下方邮箱联系我们。</p>
+      <p>联系方式：<strong id="contact-email">正在载入……</strong></p>
+      <p style="margin-top:1.5rem"><a class="btn" href="index.html">返回首页</a></p>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    (async function () {
+      const site = await fetchSection("site");
+      const intro = document.querySelector("#about-intro");
+      const email = document.querySelector("#contact-email");
+      if (site.intro) intro.textContent = site.intro;
+      if (site.contactEmail) email.textContent = site.contactEmail;
+      if (site.name) document.title = "关于 · " + site.name;
+    })().catch((e) => {
+      console.error(e);
+    });
+  </script>
+</body>
+</html>

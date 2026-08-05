@@ -1,0 +1,12 @@
+{
+  "name": "wzsf-site-api",
+  "private": true,
+  "description": "温州中学科幻社网站 · Notion 数据中转 Worker",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

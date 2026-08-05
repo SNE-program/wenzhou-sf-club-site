@@ -1,0 +1,21 @@
+# ---- 敏感信息：绝不上传 ----
+.env
+.env.local
+*.local
+权限.txt
+
+# ---- Node / 依赖 ----
+node_modules/
+.wrangler/
+dist/
+dev-dist/
+
+# ---- 系统 / 编辑器 ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+
+# ---- 本地说明 ----
+需求/
