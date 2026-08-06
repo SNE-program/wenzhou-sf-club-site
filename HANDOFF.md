@@ -12,8 +12,10 @@
 - **本轮新增发现**：GitHub 官方状态处于 *Partial System Outage*（Actions 队列滞留），
   上一轮（进程 #1）推送的 `4c98854`、`bfbe2ba` 提交**未触发任何 workflow 运行**（API 查询 total_count=0），
   线上 gh-pages 目前仍是旧版本（缺少 `4c98854` 中的导航 CSS 修复）。
-  进程 #2 已通过 `workflow_dispatch` 手动触发部署（运行 id=31126692510，提交 bfbe2ba），
-  因中断一直处于 queued；**GitHub 恢复后该运行会自动执行**，若被丢弃需按「对下一个 AI 的建议」重触发。
+  进程 #2 曾 `workflow_dispatch` 触发部署（运行 31126692510），该运行执行后 build 任务被
+  基础设施取消（与 17:41Z 的 schedule 运行相同模式），**确认是 GitHub 侧问题而非代码问题**；
+  进程 #2 的 HANDOFF 提交（`9f0660d`）推送后同样未触发运行。
+  **GitHub 恢复后需重新触发部署**（见「对下一个 AI 的建议」#0）。
 
 ## 已完成的工作
 
@@ -71,9 +73,11 @@
 
 ## 对下一个 AI 的建议
 
-0. **最高优先级（可自动完成）**：监控 GitHub Actions 运行 `31126692510`（GET `/repos/SNE-program/wenzhou-sf-club-site/actions/runs/31126692510`）。若完成且 success → 校验 gh-pages 分支与线上站点已含 `4c98854` 的修复；若仍 queued/丢失 → 重新触发：
+0. **最高优先级（可自动完成）**：GitHub 恢复后重新触发部署：
    `POST /repos/SNE-program/wenzhou-sf-club-site/actions/workflows/327989111/dispatches`，body `{"ref":"main"}`（用 `权限.txt` 的 GitHub Token）。
-   触发后等待成功再推送新代码，否则新提交仍不会上线。
+   触发后轮询 `GET /actions/runs?per_page=3` 直到出现 head_sha=`9f0660d` 且 conclusion=success；
+   然后校验 gh-pages 分支与线上站点已含 `4c98854` 的导航 CSS 修复（站点首页 `.nav a` 间距）与 `9f0660d` 的 HANDOFF 文档。
+   注意：中断期间推送与 dispatch 都可能被丢弃或取消，需在恢复后重试。
 1. **次高优先级（可自动完成）**：在 Supabase 控制台为两个 Edge Function（`send-audit-email`、`submission-review`）配置环境变量并重新 Deploy：
    - `RESEND_API_KEY`（取自根目录 `权限.txt`）
    - `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`（同上）
@@ -88,7 +92,7 @@
 - **不要修改**：`scripts/supabase-setup.mjs` 是数据库 schema 唯一真源；改动后需同时在线上库执行对应 SQL（可用临时 `_*.mjs` 连接串执行，用完即弃）。
 - **线上已改、源码待跟**：若未来重跑 `supabase-setup.mjs` 全量建表，`comments_select` 策略会自动使用修复后的版本，无需手工再改。
 - **更正（进程 #2 核验）**：`.github/workflows/deploy.yml` **只部署 GitHub Pages（gh-pages 分支），不部署 Worker**。Worker `wzsf-site-api` 是手动 `wrangler deploy` 的（部署记录 2026-08-06），与 CI 无关；wrangler 用 `权限.txt` 的 Cloudflare Token 以 `CLOUDFLARE_API_TOKEN` 环境变量执行。
-- **部署链路**：push 到 main 触发 `deploy.yml`（GitHub Pages，含 cname=wzmssf.club）。**当前 GitHub Actions 中断中**，恢复前推送的新提交可能不触发运行——必要时用 workflow_dispatch 手动触发（见「对下一个 AI 的建议」#0）。Edge Function 不在 CI 流水线内，需手动在 Supabase 控制台 Deploy。
+- **部署链路**：push 到 main 触发 `deploy.yml`（GitHub Pages，含 cname=wzmssf.club）。**当前 GitHub Actions 中断中**，中断期间推送的新提交可能不触发运行、手动 dispatch 可能被基础设施取消——恢复后需重新触发（见「对下一个 AI 的建议」#0）。Edge Function 不在 CI 流水线内，需手动在 Supabase 控制台 Deploy。
 - **邮件服务**：`RESEND_FROM` 默认 `onboarding@resend.dev`，生产建议改为已验证发件人。
 - **E2E 预置用户**：`_mkuser.mjs`（含数据库密码，仅本地）直插 auth.users/profiles 创建 e2e_user/e2e_admin/pending 用户；E2E 运行前需确保这些账号存在（进程 #2 已验证仍可用）。
 - 本地服务/E2E 依赖端口 8080；若 8080 被占用，E2E 脚本中的 base URL 需同步修改。
@@ -98,4 +102,4 @@
 - 最后修改时间：2026-08-07
 - 标识：**自动化 AI 进程 #2**（基于进程 #1 更新）
 - 测试基线：`_tmp/e2e_results.json`（39/41，本轮重跑一致）
-- 待办钩子：GitHub Actions 运行 31126692510（queued，恢复后自动执行）
+- 待办钩子：GitHub Actions 恢复后重新触发部署（dispatch，ref=main）；随后配置 Edge Function 环境变量并重新 Deploy
