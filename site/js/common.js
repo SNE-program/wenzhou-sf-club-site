@@ -5,6 +5,7 @@
   const NAV_ITEMS = [
     { href: "index.html", label: "首页" },
     { href: "activities.html", label: "活动" },
+    { href: "contests.html", label: "竞赛" },
     { href: "works.html", label: "作品" },
     { href: "members.html", label: "成员" },
     { href: "about.html", label: "关于" },

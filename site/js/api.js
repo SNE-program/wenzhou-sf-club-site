@@ -10,6 +10,7 @@ const DATA_FILES = {
   site: "data/site.json",
   activities: "data/activities.json",
   works: "data/works.json",
+  contests: "data/contests.json",
   members: "data/members.json",
 };
 

@@ -4,12 +4,14 @@
 //   GET /api/site        站点信息
 //   GET /api/activities  活动列表
 //   GET /api/works       作品列表
+//   GET /api/contests    竞赛列表
 //   GET /api/members     成员列表
 // 绑定（部署时注入，作为全局变量）：
 //   NOTION_TOKEN   Notion 内部连接令牌（ntn_ 开头）
 //   DB_SITE        Notion「站点信息」数据库 id
 //   DB_ACTIVITIES  Notion「活动」数据库 id
 //   DB_WORKS       Notion「作品」数据库 id
+//   DB_CONTESTS    Notion「竞赛」数据库 id
 //   DB_MEMBERS     Notion「成员」数据库 id
 // 使用传统格式（addEventListener），兼容所有部署方式。
 // ============================================
@@ -78,8 +80,23 @@ function mapWork(row) {
     title: propText(p["标题"]),
     author: propText(p["作者"]),
     category: propText(p["分类"]),
+    tags: p["标签"] && p["标签"].type === "multi_select" ? p["标签"].multi_select.map((s) => s.name) : [],
     summary: propText(p["简介"]),
     cover: propCover(p["封面"]),
+  };
+}
+
+function mapContest(row) {
+  const p = row.properties || {};
+  return {
+    id: row.id,
+    title: propText(p["标题"]),
+    status: propText(p["状态"]),
+    deadline: propText(p["投稿截止"]),
+    topic: propText(p["主题"]),
+    rules: propText(p["规则"]),
+    awards: propText(p["奖项设置"]),
+    winners: propText(p["获奖名单"]),
   };
 }
 
@@ -130,6 +147,13 @@ async function loadSection(route) {
       const data = await queryDatabase(DB_WORKS, { page_size: 100 });
       return data.results.map(mapWork).filter((x) => x.title);
     }
+    case "contests": {
+      const data = await queryDatabase(DB_CONTESTS, {
+        page_size: 100,
+        sorts: [{ property: "投稿截止", direction: "ascending" }],
+      });
+      return data.results.map(mapContest).filter((x) => x.title);
+    }
     case "members": {
       const data = await queryDatabase(DB_MEMBERS, { page_size: 100 });
       return data.results.map(mapMember).filter((x) => x.name);
@@ -151,7 +175,7 @@ async function handleRequest(request, event) {
   }
 
   const route = url.pathname.replace(/^\/api\//, "");
-  if (!["site", "activities", "works", "members"].includes(route)) {
+  if (!["site", "activities", "works", "contests", "members"].includes(route)) {
     return new Response("Not Found", { status: 404, headers: corsHeaders() });
   }
 

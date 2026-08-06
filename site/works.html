@@ -48,47 +48,60 @@
     (async function () {
       const works = await fetchSection("works");
 
-      // ---------- 分类筛选 ----------
+      // ---------- 分类 + 标签组合筛选 ----------
       const filterBar = document.getElementById("work-filter");
       const params = new URLSearchParams(location.search);
-      let current = (params.get("分类") || "").trim();
+      let curCat = (params.get("分类") || "").trim();
+      let curTags = (params.get("标签") || "").split(",").map((s) => s.trim()).filter(Boolean);
 
       function unique(values) {
         return [...new Set(values.filter(Boolean))];
       }
-      const categories = unique(works.map((w) => w.category));
-      if (categories.length) {
-        filterBar.hidden = false;
-        const chips = [{ label: "全部", value: "" }].concat(
-          categories.map((c) => ({ label: c, value: c }))
-        );
-        filterBar.innerHTML = chips
-          .map((c) => {
-            const count = c.value
-              ? works.filter((w) => w.category === c.value).length
-              : works.length;
-            return `<button class="filter-chip${c.value === current ? " active" : ""}" data-cat="${esc(c.value)}">
-              ${esc(c.label)}<span class="cnt">${count}</span>
-            </button>`;
-          })
-          .join("");
-        filterBar.addEventListener("click", (e) => {
-          const chip = e.target.closest(".filter-chip");
-          if (!chip) return;
-          current = chip.dataset.cat;
-          filterBar.querySelectorAll(".filter-chip").forEach((x) => x.classList.toggle("active", x === chip));
-          // 分类反映到网址，可分享直达
-          const url = new URL(location.href);
-          if (current) url.searchParams.set("分类", current);
-          else url.searchParams.delete("分类");
-          history.replaceState(null, "", url.pathname + url.search);
-          renderGrid();
-        });
+      function match(item) {
+        if (curCat && item.category !== curCat) return false;
+        return curTags.every((t) => (item.tags || []).includes(t));
       }
+      function pushState() {
+        const url = new URL(location.href);
+        if (curCat) url.searchParams.set("分类", curCat); else url.searchParams.delete("分类");
+        if (curTags.length) url.searchParams.set("标签", curTags.join(",")); else url.searchParams.delete("标签");
+        history.replaceState(null, "", url.pathname + url.search);
+      }
+
+      function renderChips() {
+        const cats = unique(works.map((w) => w.category));
+        const tagCount = {};
+        works.forEach((w) => (w.tags || []).forEach((t) => { tagCount[t] = (tagCount[t] || 0) + 1; }));
+        // 标签按出现次数降序（标签排序管理）
+        const tags = Object.keys(tagCount).sort((a, b) => tagCount[b] - tagCount[a]);
+
+        const catChips = cats.map((c) => `
+          <button class="filter-chip${c === curCat ? " active" : ""}" data-kind="cat" data-v="${esc(c)}">
+            ${esc(c)}<span class="cnt">${works.filter((w) => w.category === c).length}</span>
+          </button>`);
+        const tagChips = tags.map((t) => `
+          <button class="filter-chip${curTags.includes(t) ? " active" : ""}" data-kind="tag" data-v="${esc(t)}">
+            #${esc(t)}<span class="cnt">${tagCount[t]}</span>
+          </button>`);
+
+        filterBar.innerHTML = catChips.concat(tagChips).join("");
+        filterBar.hidden = !(catChips.length || tagChips.length);
+      }
+
+      filterBar.addEventListener("click", (e) => {
+        const chip = e.target.closest(".filter-chip");
+        if (!chip) return;
+        const v = chip.dataset.v;
+        if (chip.dataset.kind === "cat") curCat = curCat === v ? "" : v; // 分类单选，再点取消
+        else curTags = curTags.includes(v) ? curTags.filter((t) => t !== v) : [...curTags, v]; // 标签多选
+        pushState();
+        renderChips();
+        renderGrid();
+      });
 
       // ---------- 作品网格 ----------
       function renderGrid() {
-        const list = current ? works.filter((w) => w.category === current) : works;
+        const list = works.filter(match);
         document.querySelector("#works").innerHTML = list.length
           ? list.map((it) => `
             <a class="card" href="articles/${encodeURIComponent(it.id)}.html">
@@ -99,11 +112,13 @@
                 <div class="card-meta">
                   <span>${esc(it.category || "未分类")}</span>
                   ${it.author ? `<span>${esc(it.author)}</span>` : ""}
+                  ${it.tags && it.tags.length ? it.tags.map((t) => `<span>#${esc(t)}</span>`).join("") : ""}
                 </div>
               </div>
             </a>`).join("")
-          : `<div class="state">该分类下暂无作品，期待你的投稿</div>`;
+          : `<div class="state">没有符合条件的作品，换个分类或标签试试</div>`;
       }
+      renderChips();
       renderGrid();
     })().catch((e) => {
       document.querySelector("#works").innerHTML = `<div class="state">作品加载失败，请稍后刷新重试。</div>`;

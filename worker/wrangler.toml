@@ -9,6 +9,7 @@ DB_SITE = "3b339fd6-4004-81d9-b672-cda022e565bb"
 DB_ACTIVITIES = "3b339fd6-4004-8157-9ea2-c126459645f4"
 DB_WORKS = "3b339fd6-4004-8111-aac9-cf77c0c99eab"
 DB_MEMBERS = "3b339fd6-4004-81a1-a3a5-f3933823fcd6"
+DB_CONTESTS = "3b439fd6-4004-8100-8d7e-e7e049dd49b5"
 
 # NOTION_TOKEN 属于密钥，请用以下命令注入（不要写进本文件）：
 #   npx wrangler secret put NOTION_TOKEN

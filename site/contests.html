@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>写作竞赛 · 温州中学科学及幻想文学社</title>
+  <meta name="description" content="社团写作竞赛：主题、规则、投稿与获奖名单。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="写作竞赛 · 温州中学科学及幻想文学社">
+  <meta property="og:description" content="拿起笔，让想象力远航。">
+  <meta property="og:image" content="https://sne-program.github.io/wenzhou-sf-club-site/images/og-default.png">
+  <meta property="og:url" content="https://sne-program.github.io/wenzhou-sf-club-site/contests.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>写作竞赛</h1>
+      <div class="sub">拿起笔，让想象力远航。</div>
+    </div>
+
+    <div id="contests">
+      <div class="state"><div class="spinner"></div>正在加载竞赛……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    (async function () {
+      const SUBMIT_URL = "https://wax-green-237.notion.site/3b439fd6400480759e39dddbed343162?pvs=105";
+      const contests = await fetchSection("contests");
+      const root = document.getElementById("contests");
+      if (!contests.length) {
+        root.innerHTML = `<div class="state">暂无进行中的竞赛，敬请期待</div>`;
+        return;
+      }
+      root.innerHTML = contests.map((c) => `
+        <article class="contest-card">
+          <div class="contest-head">
+            <h2>${esc(c.title)}</h2>
+            ${c.status ? `<span class="status-badge s-${esc(c.status)}">${esc(c.status)}</span>` : ""}
+          </div>
+          <div class="contest-meta">
+            ${c.deadline ? `<span>⏰ 投稿截止：${esc(c.deadline)}</span>` : ""}
+          </div>
+          ${c.topic ? `<div class="contest-sec"><h3>主题</h3><p>${esc(c.topic)}</p></div>` : ""}
+          ${c.rules ? `<div class="contest-sec"><h3>参赛规则</h3><p>${esc(c.rules)}</p></div>` : ""}
+          ${c.awards ? `<div class="contest-sec"><h3>奖项设置</h3><p>${esc(c.awards)}</p></div>` : ""}
+          ${c.winners ? `<div class="contest-sec"><h3>获奖名单</h3><p>${esc(c.winners)}</p></div>` : ""}
+          ${c.status === "报名中" ? `<p style="margin-top:1.25rem"><a class="btn" href="${SUBMIT_URL}" target="_blank" rel="noopener">前往投稿箱投稿</a></p>` : ""}
+        </article>`).join("");
+    })().catch((e) => {
+      document.getElementById("contests").innerHTML = `<div class="state">竞赛信息加载失败，请稍后刷新重试。</div>`;
+      console.error(e);
+    });
+  </script>
+</body>
+</html>

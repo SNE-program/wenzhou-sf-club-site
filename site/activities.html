@@ -56,7 +56,10 @@
       function unique(values) {
         return [...new Set(values.filter(Boolean))];
       }
-      const tags = unique(acts.flatMap((a) => a.tags || []));
+      const tagCount = {};
+      acts.forEach((a) => (a.tags || []).forEach((t) => { tagCount[t] = (tagCount[t] || 0) + 1; }));
+      // 标签按出现次数降序
+      const tags = Object.keys(tagCount).sort((a, b) => tagCount[b] - tagCount[a]);
       if (tags.length) {
         filterBar.hidden = false;
         const chips = [{ label: "全部", value: "" }].concat(
