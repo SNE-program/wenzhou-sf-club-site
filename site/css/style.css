@@ -446,12 +446,48 @@ a.card:hover { text-decoration: none; }
 .modal-form input:focus { border-color: var(--accent); }
 .modal-form .btn { width: 100%; margin-top: 0.3rem; cursor: pointer; }
 .form-err { color: #f87171; font-size: 0.85rem; margin-bottom: 0.6rem; }
+.form-ok { color: var(--accent); font-size: 0.88rem; margin-bottom: 0.6rem; }
 .form-note {
   margin-top: 0.8rem;
   font-size: 0.78rem;
   color: var(--text-dim);
   text-align: center;
 }
+.auth-tag {
+  font-size: 0.72rem;
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  white-space: nowrap;
+}
+.auth-tag.rejected { color: #f87171; border-color: rgba(248, 113, 113, 0.4); }
+
+/* ---------- 审核页 ---------- */
+.audit-count { color: var(--text-dim); margin-bottom: 1rem; }
+.audit-count b { color: var(--accent); }
+.audit-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.audit-info {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.audit-item .btn { cursor: pointer; padding: 0.45rem 1.2rem; font-size: 0.9rem; }
+.audit-item .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.audit-note { margin-top: 1rem; font-size: 0.85rem; color: var(--text-dim); }
 
 /* ---------- 文章详情 ---------- */
 .back-link { color: var(--text-dim); font-size: 0.9rem; }
