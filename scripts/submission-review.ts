@@ -25,6 +25,15 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const NOTION_TOKEN = (Deno.env.get("NOTION_TOKEN") ?? "").trim();
 const NOTION_VERSION = "2022-06-28";
 
+// 环境变量缺失时优雅降级（避免平台返回裸 500 且不带 CORS 头）
+function envCheck(): string | null {
+  if (!NOTION_TOKEN) return "投稿服务未配置（缺少 NOTION_TOKEN）";
+  if (!DB_SUBMISSIONS) return "投稿服务未配置（缺少 DB_SUBMISSIONS）";
+  if (!Deno.env.get("SUPABASE_URL")) return "投稿服务未配置（缺少 SUPABASE_URL）";
+  if (!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) return "投稿服务未配置（缺少 SUPABASE_SERVICE_ROLE_KEY）";
+  return null;
+}
+
 // DB_SUBMISSIONS：自动容错误填（如 Notion 页面/表单链接、32 位无连字符 ID、多余空格）
 // 都能正确提取出标准数据库 ID；提取不到则留空，后续请求会给出清晰报错。
 const _rawDb = (Deno.env.get("DB_SUBMISSIONS") ?? "").trim();
@@ -165,6 +174,12 @@ export default {
       .maybeSingle();
     if (!me || !me.is_admin) {
       return Response.json({ error: S.noAdmin }, { status: 403 });
+    }
+
+    // 环境变量缺失时优雅降级
+    const envErr = envCheck();
+    if (envErr) {
+      return Response.json({ error: envErr }, { status: 501 });
     }
 
     // GET：待审核列表

@@ -150,7 +150,10 @@
   async function loadComments() {
     const list = document.getElementById("c-list");
     try {
-      const rows = await SB.get("comments", `article_id=eq.${encodeURIComponent(ARTICLE_ID)}&order=created_at.desc&select=*`);
+      const rows = await SB.get(
+        "comments",
+        `article_id=eq.${encodeURIComponent(ARTICLE_ID)}&order=created_at.desc&select=*&status=eq.active`
+      );
       // 加载昵称（公开视图，不暴露邮箱/状态）
       const userIds = [...new Set(rows.map((r) => r.user_id))];
       const nickMap = {};

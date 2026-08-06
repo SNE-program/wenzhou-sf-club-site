@@ -30,6 +30,14 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const RESEND_FROM = Deno.env.get("RESEND_FROM") ?? "onboarding@resend.dev";
 
+// 环境变量缺失时优雅降级（避免平台返回裸 500 且不带 CORS 头，导致浏览器报 CORS 错误）
+function envCheck(): string | null {
+  if (!RESEND_API_KEY) return "邮件服务未配置（缺少 RESEND_API_KEY，请在函数 Settings→Environment variables 中添加后重新 Deploy）";
+  if (!Deno.env.get("SUPABASE_URL")) return "邮件服务未配置（缺少 SUPABASE_URL）";
+  if (!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) return "邮件服务未配置（缺少 SUPABASE_SERVICE_ROLE_KEY）";
+  return null;
+}
+
 export default {
   fetch: withSupabase({ auth: "user" }, async (req) => {
     if (req.method !== "POST") {
@@ -52,6 +60,10 @@ export default {
     }
 
     // 管理员校验：withSupabase 只保证"已登录"，这里再确认调用者是管理员
+    const envErr = envCheck();
+    if (envErr) {
+      return Response.json({ error: envErr }, { status: 501 });
+    }
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",

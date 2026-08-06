@@ -104,7 +104,8 @@ CREATE POLICY profiles_update ON public.profiles FOR UPDATE USING (auth.uid() = 
 
 -- comments：可读未删除；登录用户可写自己的
 DROP POLICY IF EXISTS comments_select ON public.comments;
-CREATE POLICY comments_select ON public.comments FOR SELECT USING (status = 'active');
+-- 允许作者可见自己已删除的评论，否则软删除（status→deleted）会使新行不可见于 SELECT 策略而被 PostgreSQL 拒绝
+CREATE POLICY comments_select ON public.comments FOR SELECT USING (status = 'active' OR auth.uid() = user_id);
 DROP POLICY IF EXISTS comments_insert ON public.comments;
 CREATE POLICY comments_insert ON public.comments FOR INSERT WITH CHECK (auth.uid() = user_id);
 DROP POLICY IF EXISTS comments_update ON public.comments;

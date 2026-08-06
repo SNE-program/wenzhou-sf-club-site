@@ -153,7 +153,7 @@ img { max-width: 100%; display: block; }
 }
 .nav-inner {
   /* 比正文容器更宽：登录态下导航含用户名/审核/退出，内容自然宽约 1153px，需保证一行 */
-  max-width: 1280px;
+  max-width: 1320px;
   margin: 0 auto;
   padding: 0.85rem 1.25rem;
   display: flex;
@@ -164,13 +164,15 @@ img { max-width: 100%; display: block; }
 }
 .brand {
   font-family: var(--font-display);
-  font-size: 1.12rem;
+  font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text);
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  white-space: nowrap;
   transition: color 0.2s;
 }
 .brand:hover { color: var(--accent); text-decoration: none; }
@@ -201,15 +203,18 @@ img { max-width: 100%; display: block; }
 }
 .nav-links {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.3rem;
   align-items: center;
+  flex-shrink: 0;
 }
 .nav-links a {
   color: var(--text-dim);
-  font-size: 0.95rem;
-  padding: 0.35rem 0.85rem;
+  font-size: 0.9rem;
+  padding: 0.3rem 0.72rem;
   border-radius: 999px;
   position: relative;
+  flex-shrink: 0;
+  white-space: nowrap;
   transition: color 0.2s, background 0.2s;
 }
 .nav-links a::after {
@@ -862,9 +867,9 @@ a.card:hover { text-decoration: none; }
 }
 #auth-area a[data-nav-admin] {
   color: var(--gold);
-  padding: 0.35rem 0.85rem;
+  padding: 0.3rem 0.7rem;
   border-radius: 999px;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   transition: background 0.2s;
 }
 #auth-area a[data-nav-admin]:hover { background: rgba(255, 209, 102, 0.1); }
@@ -873,16 +878,16 @@ a.card:hover { text-decoration: none; }
   border: 1px solid var(--border-strong);
   color: var(--text);
   border-radius: 999px;
-  padding: 0.32rem 0.95rem;
-  font-size: 0.85rem;
+  padding: 0.28rem 0.85rem;
+  font-size: 0.82rem;
   cursor: pointer;
   transition: border-color 0.2s, color 0.2s, background 0.2s;
 }
 .auth-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(232, 177, 76, 0.06); }
 .auth-user {
   color: var(--accent);
-  font-size: 0.9rem;
-  max-width: 8rem;
+  font-size: 0.85rem;
+  max-width: 7rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1219,13 +1224,13 @@ a.card:hover { text-decoration: none; }
 .icon-btn:hover { border-color: var(--accent); background: var(--surface-hover); }
 .nav-search { position: relative; display: flex; align-items: center; }
 .nav-search input {
-  width: 9.5rem;
+  width: 8.5rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 0.34rem 2rem 0.34rem 0.85rem;
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-family: var(--font);
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s, width 0.25s;
@@ -1233,7 +1238,7 @@ a.card:hover { text-decoration: none; }
 .nav-search input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(232, 177, 76, 0.12);
-  width: 13.5rem;
+  width: 12rem;
 }
 .nav-search button {
   position: absolute;
@@ -1536,9 +1541,9 @@ html[data-theme="light"] .footer::after { border-color: rgba(178, 106, 42, 0.12)
 }
 .sf-style-select {
   height: 2.2rem;
-  max-width: 8.6rem;
-  padding: 0 1.6rem 0 0.65rem;
-  font-size: 0.82rem;
+  max-width: 8rem;
+  padding: 0 1.5rem 0 0.6rem;
+  font-size: 0.8rem;
   font-family: var(--font);
   cursor: pointer;
   flex-shrink: 0;
@@ -1557,9 +1562,9 @@ html[data-theme="light"] .footer::after { border-color: rgba(178, 106, 42, 0.12)
 /* 日/夜“切换”按钮：固定文案，容纳两个字 */
 .icon-btn#theme-toggle {
   width: auto;
-  min-width: 3.4rem;
-  padding: 0 0.55rem;
-  font-size: 0.82rem;
+  min-width: 3.2rem;
+  padding: 0 0.5rem;
+  font-size: 0.8rem;
 }
 
 /* ---- neon：赛博霓虹 · 霓虹发光 + 斜切工业角 ---- */
@@ -1621,7 +1626,7 @@ html[data-style="aurora"] .sf-style-select:hover {
 
 @media (max-width: 720px) {
   .sf-style-select { max-width: 7rem; padding-right: 1.4rem; }
-  .icon-btn#theme-toggle { min-width: 3rem; padding: 0 0.45rem; }
+  .icon-btn#theme-toggle { min-width: 2.9rem; padding: 0 0.4rem; }
 }
 
 /* ============================================
