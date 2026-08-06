@@ -40,10 +40,23 @@
 
   <script src="js/common.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/supabase.js"></script>
   <script>
     (async function () {
       const SUBMIT_URL = "https://wax-green-237.notion.site/3b439fd6400480759e39dddbed343162?pvs=105";
-      const contests = await fetchSection("contests");
+
+      // 优先读 Supabase（在线管理的内容），失败/为空则降级 Notion/本地数据
+      async function loadContests() {
+        try {
+          const rows = await SB.get("contests", "select=*&order=sort_order.asc");
+          if (Array.isArray(rows) && rows.length) return rows;
+        } catch (e) {
+          console.warn("读取在线竞赛失败，使用本地数据:", e.message);
+        }
+        return fetchSection("contests");
+      }
+
+      const contests = await loadContests();
       const root = document.getElementById("contests");
       if (!contests.length) {
         root.innerHTML = `<div class="state">暂无进行中的竞赛，敬请期待</div>`;

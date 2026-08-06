@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>竞赛管理 · 温州中学科学及幻想文学社</title>
+  <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>竞赛管理</h1>
+      <div class="sub">在线编辑竞赛信息，保存后网站立即更新。内容会写入网站数据库，替代 Notion 竞赛页。</div>
+    </div>
+    <p><a class="back-link" href="admin.html">← 返回入站审核</a></p>
+
+    <div id="admin-root">
+      <div class="state"><div class="spinner"></div>正在加载……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    (async function () {
+      const root = document.getElementById("admin-root");
+      const user = SB.user();
+      if (!user) {
+        root.innerHTML = `<div class="state"><p>请先登录管理员账号</p><p style="margin-top:1rem"><button class="btn" id="go-login" type="button">登录</button></p></div>`;
+        document.getElementById("go-login").addEventListener("click", () => window.openAuthModal("login"));
+        return;
+      }
+      const me = await window.getMyProfile();
+      if (!me || !me.is_admin) {
+        root.innerHTML = `<div class="state">你没有管理权限。</div>`;
+        return;
+      }
+
+      let rows = [];
+      try {
+        rows = await SB.get("contests", "select=*&order=sort_order.asc");
+      } catch (e) {
+        root.innerHTML = `<div class="state">加载失败：${esc(e.message)}</div>`;
+        return;
+      }
+
+      // 表单模板（编辑模式带 id）
+      function formHTML(item) {
+        const v = (k) => (item ? item[k] ?? "" : "");
+        return `
+          <div class="contest-form">
+            <form id="contest-form">
+              <input type="hidden" name="id" value="${item ? item.id : ""}">
+              <div class="c-grid">
+                <label class="c-field span2">标题 *<input name="title" required value="${esc(v("title"))}" placeholder="如：第一届「星际信使」科幻征文大赛"></label>
+                <label class="c-field">状态
+                  <select name="status">
+                    ${["报名中", "评审中", "已结束"].map((s) => `<option value="${s}"${v("status") === s ? " selected" : ""}>${s}</option>`).join("")}
+                  </select>
+                </label>
+                <label class="c-field">投稿截止<input type="date" name="deadline" value="${esc(v("deadline") || "")}"></label>
+                <label class="c-field">排序<input type="number" name="sort_order" value="${v("sort_order") ?? 0}" step="1"></label>
+              </div>
+              <label class="c-field">主题<textarea name="topic" rows="2">${esc(v("topic"))}</textarea></label>
+              <label class="c-field">参赛规则<textarea name="rules" rows="4">${esc(v("rules"))}</textarea></label>
+              <label class="c-field">奖项设置<textarea name="awards" rows="2">${esc(v("awards"))}</textarea></label>
+              <label class="c-field">获奖名单<textarea name="winners" rows="2">${esc(v("winners"))}</textarea></label>
+              <div class="c-actions">
+                <button class="btn" type="submit">${item ? "保存修改" : "创建竞赛"}</button>
+                <button class="c-btn" type="button" id="form-cancel">取消</button>
+              </div>
+            </form>
+          </div>`;
+      }
+
+      function render() {
+        root.innerHTML = `
+          <div class="c-toolbar">
+            <span class="audit-count">共 <b>${rows.length}</b> 场竞赛</span>
+            <button class="btn" id="btn-new" type="button">＋ 新建竞赛</button>
+          </div>
+          <div id="form-wrap" hidden></div>
+          <div id="contest-list">
+            ${rows.length
+              ? rows.map((c) => `
+                <div class="contest-item" data-id="${c.id}">
+                  <div class="contest-info">
+                    <div class="c-head"><b>${esc(c.title)}</b><span class="status-badge s-${esc(c.status)}">${esc(c.status)}</span></div>
+                    <div class="c-meta">${c.deadline ? `截止 ${esc(c.deadline)}` : ""}${c.sort_order ? ` · 排序 ${c.sort_order}` : ""}</div>
+                  </div>
+                  <div class="c-actions">
+                    <button class="btn audit-pass" type="button" data-act="edit">编辑</button>
+                    <button class="c-btn audit-reject" type="button" data-act="del">删除</button>
+                  </div>
+                </div>`).join("")
+              : `<div class="state">还没有竞赛，点「新建竞赛」创建第一场。</div>`}
+          </div>`;
+
+        document.getElementById("btn-new").addEventListener("click", () => {
+          const wrap = document.getElementById("form-wrap");
+          wrap.hidden = false;
+          wrap.innerHTML = formHTML(null);
+          bindForm();
+          wrap.scrollIntoView({ behavior: "smooth" });
+        });
+
+        document.querySelectorAll("#contest-list .contest-item").forEach((item) => {
+          const id = item.dataset.id;
+          const c = rows.find((r) => r.id === id);
+          item.querySelector('[data-act="edit"]').addEventListener("click", () => {
+            const wrap = document.getElementById("form-wrap");
+            wrap.hidden = false;
+            wrap.innerHTML = formHTML(c);
+            bindForm();
+            wrap.scrollIntoView({ behavior: "smooth" });
+          });
+          item.querySelector('[data-act="del"]').addEventListener("click", async () => {
+            if (!confirm(`确认删除「${c.title}」吗？此操作不可恢复。`)) return;
+            try {
+              await SB.remove("contests", `id=eq.${id}`);
+              rows = rows.filter((r) => r.id !== id);
+              render();
+            } catch (e) {
+              alert("删除失败：" + e.message);
+            }
+          });
+        });
+      }
+
+      async function bindForm() {
+        const form = document.getElementById("contest-form");
+        const cancel = document.getElementById("form-cancel");
+        cancel.addEventListener("click", () => {
+          document.getElementById("form-wrap").hidden = true;
+        });
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const fd = new FormData(form);
+          const id = fd.get("id");
+          const body = {
+            title: fd.get("title").trim(),
+            status: fd.get("status"),
+            deadline: fd.get("deadline") || null,
+            sort_order: Number(fd.get("sort_order")) || 0,
+            topic: fd.get("topic").trim(),
+            rules: fd.get("rules").trim(),
+            awards: fd.get("awards").trim(),
+            winners: fd.get("winners").trim(),
+          };
+          if (!body.title) return;
+          const btn = form.querySelector("button[type=submit]");
+          btn.disabled = true;
+          btn.textContent = "保存中…";
+          try {
+            if (id) {
+              await SB.update("contests", body, `id=eq.${id}`);
+            } else {
+              await SB.insert("contests", body);
+            }
+            rows = await SB.get("contests", "select=*&order=sort_order.asc");
+            render();
+          } catch (err) {
+            alert("保存失败：" + err.message);
+            btn.disabled = false;
+            btn.textContent = id ? "保存修改" : "创建竞赛";
+          }
+        });
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>

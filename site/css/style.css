@@ -1179,6 +1179,37 @@ mark {
   .contest-card { padding: 1.2rem 1.1rem; }
 }
 
+/* ---------- 竞赛管理页 ---------- */
+.c-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.contest-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 1rem 1.25rem; margin-bottom: 0.75rem;
+}
+.contest-info { min-width: 0; }
+.c-head { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.c-head b { font-size: 1.02rem; }
+.c-meta { color: var(--text-dim); font-size: 0.85rem; margin-top: 0.2rem; }
+.contest-form {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 1.4rem 1.5rem; margin-bottom: 1.25rem;
+}
+.c-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin-bottom: 0.6rem; }
+.c-grid .span2 { grid-column: span 2; }
+.c-field { display: block; font-size: 0.9rem; color: var(--text-dim); margin-bottom: 0.8rem; }
+.c-field input, .c-field select, .c-field textarea {
+  display: block; width: 100%; margin-top: 0.35rem; padding: 0.5rem 0.7rem;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: calc(var(--radius) * 0.6);
+  font: inherit; resize: vertical;
+}
+.c-field input:focus, .c-field select:focus, .c-field textarea:focus { outline: none; border-color: var(--accent); }
+.c-actions { display: flex; gap: 0.6rem; margin-top: 0.4rem; }
+@media (max-width: 720px) {
+  .c-grid { grid-template-columns: 1fr; }
+  .c-grid .span2 { grid-column: span 1; }
+}
+
 /* ============================================
    亮色主题
    ============================================ */
