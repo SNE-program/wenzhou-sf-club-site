@@ -5,14 +5,15 @@
 
 ## 当前状态
 
-⚠️ **E2E 测试 39/41 通过（与基线一致）；剩余 2 项均需人工介入（非代码缺陷）。GitHub Actions 已恢复，部署已成功推送 gh-pages 分支，等待 GitHub Pages 发布。** 
+⚠️ **E2E 测试 39/41 通过（与基线一致）；剩余 2 项均需人工介入（非代码缺陷）。GitHub Actions 已恢复，gh-pages 分支已含最新代码；已用 API 强制重建 Pages（状态由 errored → building），线上发布在 GitHub 队列中（基础设施延迟）。** 
 
 - 全部核心业务链路已跑通并通过本地测试（静态站点、主题/风格切换、登录/登出、管理员审核、表态、评论增查改删举报、竞赛管理、Notion 数据链路）。
 - 剩余 2 项失败均为**环境/基础设施层问题**，代码侧已做优雅降级，部署环境配置完成后即可全绿。
 - **本轮（进程 #3）新增发现**：
   - GitHub 官方中断已恢复（滞留的 dispatch 运行 31126692510 已结束，结论 failure=cancelled 属旧中断遗留）。
   - 已重新 `workflow_dispatch`（ref=main，head **56e1c74**，运行 31127313616）→ **conclusion=success**，gh-pages 分支已更新至 `bea6b92`（含 4c98854 的导航 CSS 修复）。
-  - 线上站点发布由 GitHub 自动的「pages build and deployment」执行（运行 31127318150 曾滞留 queued 数十分钟），**发布完成后**线上 CSS 应含 `.nav-links a` 的 `flex-shrink:0; white-space:nowrap` 修复（gh-pages 分支已验证包含，线上需等发布）。
+  - **已提交并推送进程 #3 的 HANDOFF 更新**（commit **326cee5**，main 与 origin/main 一致）；再次 dispatch（运行 31127853791）排队中。
+  - **Pages 状态排障（关键）**：`GET /pages` 显示 **status=errored**（中断期构建失败残留），这正是线上迟迟未更新的直接原因。已用 `POST /pages/builds` 强制重建 → 状态转为 **building**（commit=bea6b92）。构建完成 + CDN 传播后，线上 CSS 应含 `.nav-links a` 的 `flex-shrink:0; white-space:nowrap` 修复（gh-pages 分支已验证包含）。
   - **T6.1 根因升级（重要）**：确认 GoTrue 会校验注册邮箱域名的 **MX 记录**——`example.com` 为 **null MX**（RFC 7505，明确不收邮件）→ 恒被拒为「Email address is invalid」；`wzsf.local` 无公网 MX 同理。`qq.com` / `gmail.com` 等有正常 MX 可通过校验。**已修正 E2E 临时脚本注册邮箱为 `@qq.com`**（仅改 `_tmp/e2e_test.py`，不入库）。
   - T6.1 剩余阻塞仅为 Supabase 邮件发送限流（429 `over_email_send_rate_limit`，跨多进程持续，判定为共享/环境级限流），解除后重跑预期通过。
 
@@ -66,14 +67,15 @@
 |---|---|---|
 | T6.1 注册发送验证邮件（429） | **需人工/可重试** | Supabase GoTrue 邮件发送持续命中环境级限流（429 `over_email_send_rate_limit`，跨进程持续数小时，判定共享/环境级限流）。注册链路本身逻辑正常。**根因补充（进程 #3）**：GoTrue 校验邮箱域名 **MX 记录**，`example.com`（null MX）/`wzsf.local` 恒被判无效；E2E 临时脚本已改用 `@qq.com`（有真实 MX）。限流解除后重跑 T6.1 预期通过。 |
 | T11 Edge Function 无 CORS 头（500） | **需人工** | 远端函数缺 `RESEND_API_KEY` / `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 环境变量（进程 #3 用管理员 JWT 复核：仍返回裸 500 且无 CORS 头）。本环境无 Supabase CLI / 控制台权限，无法配置并重新 Deploy。代码修复（envCheck→501）已在仓库且经验证正确（withSupabase 默认自动加 CORS 头），**在控制台配好环境变量并重新 Deploy 即修复**。 |
-| GitHub Pages 发布排队（线上为旧版） | **环境/可重试** | GitHub 中断已恢复；`workflow_dispatch`（head 56e1c74）**已成功**，gh-pages 分支已更新至 bea6b92（含导航 CSS 修复）。线上发布由 GitHub 自动「pages build and deployment」执行（运行 31127318150，曾滞留 queued 数十分钟）。**若长时间未完成，重触发：** push 一个空提交或再次 dispatch。发布完成后线上 CSS 应含 `.nav-links a` 的 `flex-shrink:0; white-space:nowrap`。 |
+| GitHub Pages 线上发布排队（线上仍为旧版） | **环境/可重试** | Pages API 显示 `status=errored`（中断期构建失败残留）。进程 #3 已 `POST /pages/builds` 强制重建 → `status=building`（commit=bea6b92，含导航 CSS 修复）。构建完成并 CDN 传播后线上自动更新。若长时间仍未更新，见「建议 #0」。 |
 
 ## 对下一个 AI 的建议
 
 0. **最高优先级（可自动完成）**：验证线上站点已发布新版本：
-   - 检查运行 31127318150（pages build and deployment）是否 conclusion=success；
+   - 检查 `GET https://api.github.com/repos/SNE-program/wenzhou-sf-club-site/pages/builds/latest`（用 `权限.txt` 的 GitHub Token）status 是否为 `built`；
    - 抓取 `https://sne-program.github.io/wenzhou-sf-club-site/css/style.css`，确认 `.nav-links a` 含 `flex-shrink: 0; white-space: nowrap;`（即 4c98854 导航 CSS 修复）；
-   - 若线上仍为旧版且运行已取消/失败，重新 `workflow_dispatch`（`POST /actions/workflows/327989111/dispatches`，body `{"ref":"main"}`，用 `权限.txt` 的 GitHub Token）。
+   - 若线上仍为旧版，再次执行 `POST /pages/builds` 强制重建；若 Pages 状态又回到 errored，可先 `PUT /pages`（body `{"source":{"branch":"gh-pages","path":"/"}}`）再重建。
+   - 注意：本机 git push/fetch 需走系统代理（`git -c http.proxy=http://127.0.0.1:7890`），否则 github.com 直连被网络层拦截（20.205.243.166 不可达，140.82.114.3 可达）。
 1. **次高优先级（需人工，自动进程无法完成）**：在 Supabase 控制台为两个 Edge Function（`send-audit-email`、`submission-review`）配置环境变量并重新 Deploy：
    - `RESEND_API_KEY`（取自根目录 `权限.txt`）
    - `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`（同上）
@@ -96,6 +98,6 @@
 ## 最后修改时间与标识
 
 - 最后修改时间：2026-08-07
-- 标识：**自动化 AI 进程 #3**（基于进程 #2 更新）
+- 标识：**自动化 AI 进程 #3**（基于进程 #2 更新；HANDOFF 更新已提交为 `326cee5` 并推送 origin/main）
 - 测试基线：`_tmp/e2e_results.json`（39/41，本轮重跑一致）
-- 待办钩子：① 等 pages build 完成并验证线上导航 CSS 修复（若排队卡死则重触发 dispatch）；② 人工在 Supabase 控制台配置 Edge Function 环境变量并重新 Deploy；③ 邮件限流解除后重跑 T6.1（E2E 已改用 `@qq.com`）
+- 待办钩子：① 等 Pages 强制重建完成（`/pages/builds/latest` 应为 built），验证线上 CSS 含 nav 修复（见「建议 #0」）；② 人工在 Supabase 控制台配置 Edge Function 环境变量并重新 Deploy（T11）；③ 邮件限流解除后重跑 T6.1（E2E 已改用 `@qq.com`）。git 操作需走代理 `-c http.proxy=http://127.0.0.1:7890`。
