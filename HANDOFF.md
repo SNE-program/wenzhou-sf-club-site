@@ -41,6 +41,7 @@
 | GoTrue 管理 API 复核 | 用已存在邮箱 POST `/auth/v1/admin/users` 返回 500 `Database error checking email`（新邮箱创建正常 200）；确认 `_mkuser.mjs` 直插 DB 的绕过方式仍必要 | ℹ️ 已记录 |
 | 测试数据清理 | 删除本轮产生的 `probe_*@qq.com`（API 探针）与 `signup_*@qq.com`（T6.1 注册）共 2 个测试用户；审核待审列表残留测试用户 = 0 | ✅ |
 | 线上冒烟 | 线上首页 200、品牌文案、auth.js 正常加载 | ✅ |
+| 推送触发核验 | 推送 e049f04（仅改 HANDOFF.md）**未创建 workflow 运行**（推送触发在中断期仍不可靠）；内容不受影响（仅文档变更，site/ 未变）。`workflow_dispatch` 为可靠兜底 | ℹ️ 已记录 |
 
 ### 修复过的问题（历史轮次，仍有效）
 1. **评论软删除 403（RLS 缺陷，T9.7）**：`comments_select` 策略已改为 `USING (status = 'active' OR auth.uid() = user_id)`，前端加 `status=eq.active` 过滤；线上库已同步执行。
@@ -60,7 +61,7 @@
 | 项 | 原因分类 | 说明 |
 |---|---|---|
 | T11 Edge Function 无 CORS 头（500） | **需人工** | 远端函数缺 `RESEND_API_KEY` / `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 环境变量（本轮 E2E 复核：审核「通过」触发调用时浏览器报 CORS 拦截）。本环境无 Supabase CLI / 控制台权限，无法配置并重新 Deploy。代码修复（envCheck→501）已在仓库，**在控制台配好环境变量并重新 Deploy 即修复**，重跑 E2E 后 T11 应通过。 |
-| GitHub Pages API 状态字段（building） | **环境/可重试** | Pages 构建队列曾卡 12h+（GitHub Partial System Outage，Pages 组件 major_outage）。**线上内容已确认最新版**（live CSS 含修复），仅 API 状态字段滞后。若后续再出现线上不同步，参考「建议 #0」。 |
+| GitHub Pages API 状态字段（building） | **环境/可重试** | Pages 构建队列在 GitHub Partial System Outage（Pages 组件 major_outage）期间排队延迟（bea6b92 构建自 2026-08-06T20:52Z 排队，进程 #4 截至 21:24Z 约 32 分钟仍未开始，属队列积压）。**线上内容已确认最新版**（live CSS 含修复），仅 API 状态字段滞后。若后续再出现线上不同步，参考「建议 #0」。另：进程 #4 推送 e049f04（仅改 HANDOFF.md）未触发 workflow 运行，推送触发在中断期仍不可靠，`workflow_dispatch` 是可靠兜底。 |
 | 邮件限流（T6.1） | **已解除** | 本轮注册链路已通过；若未来再次 429，属 Supabase 共享/环境级限流，等待解除后重试即可。 |
 
 ## 对下一个 AI 的建议
