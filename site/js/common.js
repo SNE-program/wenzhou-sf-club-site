@@ -19,7 +19,7 @@
     const cur = currentPage();
     const links = NAV_ITEMS.map(
       (it) =>
-        `<a href="${it.href}" class="${it.href === cur ? "active" : ""}">${it.label}</a>`
+        `<a href="${it.href}" class="${it.href === cur ? "active" : ""}"${it.href === cur ? ' aria-current="page"' : ""}>${it.label}</a>`
     ).join("");
     return `
       <div class="nav">

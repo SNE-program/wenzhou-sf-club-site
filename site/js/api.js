@@ -37,11 +37,11 @@ function coverStyle(item, seed) {
     return `background-image:url(${item.cover});background-size:cover;background-position:center;`;
   }
   const palettes = [
-    "linear-gradient(135deg,#22d3ee,#3b82f6)",
-    "linear-gradient(135deg,#a78bfa,#6366f1)",
-    "linear-gradient(135deg,#22d3ee,#a78bfa)",
-    "linear-gradient(135deg,#f472b6,#8b5cf6)",
-    "linear-gradient(135deg,#38bdf8,#22c55e)",
+    "radial-gradient(120% 130% at 18% 16%, rgba(110,231,249,0.5), transparent 55%),linear-gradient(135deg,#0b1f3a,#123a66 60%,#1e7ab0)",
+    "radial-gradient(120% 130% at 82% 20%, rgba(167,139,250,0.55), transparent 55%),linear-gradient(135deg,#160f38,#33226b 60%,#7c5cd6)",
+    "radial-gradient(120% 130% at 20% 80%, rgba(110,231,249,0.4), transparent 55%),linear-gradient(135deg,#0a2230,#0e4d5e 60%,#3fb7c9)",
+    "radial-gradient(120% 130% at 80% 78%, rgba(245,200,119,0.35), transparent 55%),linear-gradient(135deg,#241038,#5a2a63 60%,#c97ba8)",
+    "radial-gradient(120% 130% at 30% 22%, rgba(96,165,250,0.5), transparent 55%),linear-gradient(135deg,#0c1730,#1d3a6e 60%,#4a7fd4)",
   ];
   const idx = Math.abs(String(seed || "").length) % palettes.length;
   return `background:${palettes[idx]};`;

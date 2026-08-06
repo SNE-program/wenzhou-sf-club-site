@@ -6,6 +6,14 @@
   <title>温州中学科学及幻想文学社</title>
   <meta name="description" content="温州中学科学及幻想文学社 —— 读科幻、写幻想、观星象、聊未来。">
   <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
   <div data-nav></div>
@@ -13,8 +21,19 @@
   <main class="container">
     <!-- 英雄区 -->
     <section class="hero" id="hero">
-      <h1><span id="hero-name">温州中学科学及幻想文学社</span></h1>
-      <p id="hero-intro">正在载入社团简介……</p>
+      <!-- 五环浑天仪 · 标题下方背景层 -->
+      <div class="armillary-stage" id="armillary" aria-hidden="true"></div>
+
+      <div class="hero-inner">
+        <div class="hero-badge"><span class="badge-dot" aria-hidden="true"></span>Science &amp; Fiction · WZMS</div>
+        <h1><span id="hero-name">温州中学科学及幻想文学社</span></h1>
+        <p id="hero-intro">正在载入社团简介……</p>
+        <div class="hero-cta">
+          <a class="btn" href="activities.html">近期活动 <span aria-hidden="true">→</span></a>
+          <a class="btn ghost" href="about.html">了解我们</a>
+        </div>
+        <div class="hero-scroll" aria-hidden="true"><span></span></div>
+      </div>
     </section>
 
     <!-- 最新活动 -->
@@ -38,6 +57,24 @@
   <script src="js/api.js"></script>
   <script src="js/supabase.js"></script>
   <script src="js/auth.js"></script>
+
+  <!-- 五环浑天仪 · 英雄区背景层 -->
+  <script type="module">
+    const stage = document.getElementById("armillary");
+    if (stage && typeof createArmillary === "undefined") {
+      try {
+        const { createArmillary } = await import("./js/armillary.js");
+        window.__armillary = createArmillary(stage, {
+          interactive: false,
+          wheelZoom: false,
+          autoRotate: true,
+        });
+      } catch (e) {
+        console.warn("[浑天仪] 三维组件加载失败，舞台自动隐藏。", e);
+        stage.classList.add("arm-failed");
+      }
+    }
+  </script>
   <script>
     (async function () {
       // 站点信息
