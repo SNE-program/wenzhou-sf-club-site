@@ -38,11 +38,11 @@ function coverStyle(item, seed) {
     return `background-image:url(${item.cover});background-size:cover;background-position:center;`;
   }
   const palettes = [
-    "radial-gradient(120% 130% at 18% 16%, rgba(110,231,249,0.5), transparent 55%),linear-gradient(135deg,#0b1f3a,#123a66 60%,#1e7ab0)",
-    "radial-gradient(120% 130% at 82% 20%, rgba(167,139,250,0.55), transparent 55%),linear-gradient(135deg,#160f38,#33226b 60%,#7c5cd6)",
-    "radial-gradient(120% 130% at 20% 80%, rgba(110,231,249,0.4), transparent 55%),linear-gradient(135deg,#0a2230,#0e4d5e 60%,#3fb7c9)",
-    "radial-gradient(120% 130% at 80% 78%, rgba(245,200,119,0.35), transparent 55%),linear-gradient(135deg,#241038,#5a2a63 60%,#c97ba8)",
-    "radial-gradient(120% 130% at 30% 22%, rgba(96,165,250,0.5), transparent 55%),linear-gradient(135deg,#0c1730,#1d3a6e 60%,#4a7fd4)",
+    "radial-gradient(120% 130% at 18% 16%, rgba(232,177,76,0.5), transparent 55%),linear-gradient(135deg,#1c1030,#5a2a1e 60%,#c9712e)",
+    "radial-gradient(120% 130% at 82% 20%, rgba(63,216,197,0.5), transparent 55%),linear-gradient(135deg,#0f2430,#0e4d5e 60%,#3fb7c9)",
+    "radial-gradient(120% 130% at 20% 80%, rgba(255,122,89,0.45), transparent 55%),linear-gradient(135deg,#2a1030,#7a2a4d 60%,#e06a8a)",
+    "radial-gradient(120% 130% at 80% 78%, rgba(255,209,102,0.4), transparent 55%),linear-gradient(135deg,#201a30,#5a4a1e 60%,#c9a23e)",
+    "radial-gradient(120% 130% at 30% 22%, rgba(190,140,255,0.45), transparent 55%),linear-gradient(135deg,#1c1030,#3a2a6e 60%,#7a5cd6)",
   ];
   const idx = Math.abs(String(seed || "").length) % palettes.length;
   return `background:${palettes[idx]};`;

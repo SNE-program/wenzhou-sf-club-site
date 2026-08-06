@@ -11,6 +11,23 @@
     { href: "about.html", label: "关于" },
   ];
   const THEME_KEY = "wzsf-theme";
+  const STYLE_KEY = "wzsf-style";
+
+  // 四套 SF 风格：黄铜星图（复古未来）/ 赛博霓虹（Cyberpunk 2077）/ 深空极光（原版深空）/ 复古计算（CRT 终端）
+  const STYLES = [
+    { id: "brass", name: "黄铜星图", icon: "◈" },
+    { id: "neon", name: "赛博霓虹", icon: "⌬" },
+    { id: "aurora", name: "深空极光", icon: "✧" },
+    { id: "retro", name: "复古计算", icon: "▮" },
+  ];
+
+  // 首帧前应用已保存的风格，避免闪烁
+  try {
+    const savedStyle = localStorage.getItem(STYLE_KEY);
+    if (savedStyle && STYLES.some((s) => s.id === savedStyle)) {
+      document.documentElement.setAttribute("data-style", savedStyle);
+    }
+  } catch (e) { /* 忽略 */ }
 
   function currentPage() {
     return location.pathname.split("/").pop() || "index.html";
@@ -32,7 +49,10 @@
           <button class="nav-toggle" aria-label="展开菜单" aria-expanded="false">☰</button>
           <nav class="nav-links" id="nav-links">${links}</nav>
           <div class="nav-tools">
-            <button type="button" class="icon-btn" id="theme-toggle" aria-label="切换浅色/深色模式" title="切换主题">☀️</button>
+            <select class="sf-style-select" id="style-select" aria-label="选择SF风格">
+              ${STYLES.map((s) => `<option value="${s.id}">${s.icon} ${s.name}</option>`).join("")}
+            </select>
+            <button type="button" class="icon-btn" id="theme-toggle" aria-label="切换日/夜模式">切换</button>
             <form class="nav-search" id="nav-search" role="search" action="search.html" method="get">
               <input type="search" name="q" placeholder="搜索…" aria-label="站内搜索" autocomplete="off">
               <button type="submit" aria-label="搜索">⌕</button>
@@ -58,15 +78,36 @@
   function syncThemeButton() {
     const btn = document.getElementById("theme-toggle");
     if (!btn) return;
+    // 固定文案“切换”，图标恒定，点击只切换日/夜形态
+    btn.textContent = "切换";
     const dark = currentTheme() === "dark";
-    btn.textContent = dark ? "☀️" : "🌙"; // 显示"将要切换到"的模式
-    btn.setAttribute("aria-label", dark ? "切换到浅色模式" : "切换到深色模式");
+    btn.setAttribute("aria-label", dark ? "切换到日间模式" : "切换到夜间模式");
+    btn.title = dark ? "切换日/夜模式：当前夜间 → 日间" : "切换日/夜模式：当前日间 → 夜间";
   }
   function toggleTheme() {
     const next = currentTheme() === "dark" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
     try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* 忽略 */ }
     syncThemeButton();
+  }
+
+  // ---------- SF 风格（下拉直接选择） ----------
+  function currentStyle() {
+    const cur = document.documentElement.getAttribute("data-style") || "brass";
+    return STYLES.some((s) => s.id === cur) ? cur : "brass";
+  }
+  function syncStyleSelect() {
+    const sel = document.getElementById("style-select");
+    if (!sel) return;
+    sel.value = currentStyle();
+  }
+  function selectStyle(value) {
+    const next = STYLES.some((s) => s.id === value) ? value : "brass";
+    document.documentElement.setAttribute("data-style", next);
+    try { localStorage.setItem(STYLE_KEY, next); } catch (e) { /* 忽略 */ }
+    syncStyleSelect();
+    // 通知页面（如首页重建浑天仪配色）
+    window.dispatchEvent(new CustomEvent("wzsf:style", { detail: { style: next } }));
   }
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -78,6 +119,10 @@
     syncThemeButton();
     const themeBtn = document.getElementById("theme-toggle");
     if (themeBtn) themeBtn.addEventListener("click", toggleTheme);
+
+    syncStyleSelect();
+    const styleSel = document.getElementById("style-select");
+    if (styleSel) styleSel.addEventListener("change", (e) => selectStyle(e.target.value));
 
     // 移动端菜单开关
     const toggle = document.querySelector(".nav-toggle");

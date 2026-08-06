@@ -2,25 +2,113 @@
 // 五环浑天仪 · 可嵌入三维组件（ES Module）
 // 依赖：页面需提供 importmap 指向 three（见 index.html）
 // 用法：createArmillary(container, options)
-// 设计：极光深空配色 · 精简优雅模型 · 舞台化展示
+// 设计：五环浑天仪可随站点 SF 风格切换配色（黄铜/霓虹/极光）
+//       options.theme: 'brass' | 'neon' | 'aurora'，默认 'brass'
 // ============================================
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-// 五环极光配色：外→内 青 → 紫 → 青绿 → 靛 → 金
-const RING_PALETTE = [
-  { ring: '#7ce8ff', glow: '#38bdf8' }, // 环1 最外 · 青
-  { ring: '#b9a2ff', glow: '#8b5cf6' }, // 环2 · 紫
-  { ring: '#7ff0e2', glow: '#2dd4bf' }, // 环3 · 青绿
-  { ring: '#94a5ff', glow: '#6366f1' }, // 环4 · 靛
-  { ring: '#ffd98c', glow: '#f5c877' }, // 环5 最内 · 金
-];
+// 三套 SF 风格配色：外→内 五环 + 核心 / 光晕 / 星尘 / 灯光
+const THEMES = {
+  // 黄铜星图 · 复古未来主义（原子之心感）：做旧金属 + 暖金核心
+  brass: {
+    ringPalette: [
+      { ring: '#e6b14e', glow: '#c98a2d', marker: '#ffd166' }, // 环1 最外 · 黄铜金（带刻度）
+      { ring: '#d98a52', glow: '#bd6a2e', marker: '#e8a76a' }, // 环2 · 古铜
+      { ring: '#f2d492', glow: '#dcb264', marker: '#ffefc9' }, // 环3 · 奶金
+      { ring: '#3fd8c5', glow: '#1fb3a2', marker: '#7ff0e2' }, // 环4 · 复古青（点睛环）
+      { ring: '#ff9e42', glow: '#ef7a1e', marker: '#ffb066' }, // 环5 最内 · 琥珀
+    ],
+    amb: 0x3a2a1e, ambI: 1.15,
+    hemiSky: 0xffd9a8, hemiGround: 0x1a0f2e, hemiI: 0.6,
+    key: 0xffe0b0, keyI: 2.6,
+    rim: 0x3fd8c5, rimI: 1.7,
+    fill: 0xff9d7a, fillI: 0.9,
+    coreLight: 0xffb35c, coreLightI: 20,
+    core: '#ffd9a0', coreEmis: '#ff9e42',
+    inner: '#fff4dd',
+    halo1: 'rgb(255,190,110)', halo2: 'rgb(255,226,170)',
+    dustA: 0xffd98c, dustB: 0x3fd8c5,
+    ember: 0xffb35c,
+    far: 0xffe9c4,
+  },
+
+  // 赛博霓虹 · Cyberpunk 2077：霓虹黄 / 青 / 品红，冷白核心
+  neon: {
+    ringPalette: [
+      { ring: '#ffe100', glow: '#ffd000', marker: '#fff59d' }, // 环1 · 霓虹黄
+      { ring: '#00f0ff', glow: '#00c8d6', marker: '#8af6ff' }, // 环2 · 霓虹青
+      { ring: '#ff2e63', glow: '#e01e50', marker: '#ff8aa8' }, // 环3 · 品红
+      { ring: '#7a5cff', glow: '#5c3dff', marker: '#b39bff' }, // 环4 · 紫外
+      { ring: '#00f0ff', glow: '#00c8d6', marker: '#d6fbff' }, // 环5 · 青
+    ],
+    amb: 0x12081f, ambI: 1.25,
+    hemiSky: 0x8af6ff, hemiGround: 0x05060c, hemiI: 0.6,
+    key: 0xe8f6ff, keyI: 2.4,
+    rim: 0xff2e63, rimI: 1.9,
+    fill: 0x00f0ff, fillI: 1.0,
+    coreLight: 0x9ff2ff, coreLightI: 24,
+    core: '#eafcff', coreEmis: '#00eaff',
+    inner: '#ffffff',
+    halo1: 'rgb(120,240,255)', halo2: 'rgb(255,230,120)',
+    dustA: 0x8af6ff, dustB: 0xffe100,
+    ember: 0x9ff2ff,
+    far: 0xbcd6ff,
+  },
+
+  // 深空极光 · 原版深空：极光青紫 + 暖金核心
+  aurora: {
+    ringPalette: [
+      { ring: '#7ce8ff', glow: '#38bdf8', marker: '#c6f5ff' },
+      { ring: '#b9a2ff', glow: '#8b5cf6', marker: '#e2d6ff' },
+      { ring: '#7ff0e2', glow: '#2dd4bf', marker: '#d0fff8' },
+      { ring: '#94a5ff', glow: '#6366f1', marker: '#d6ddff' },
+      { ring: '#ffd98c', glow: '#f5c877', marker: '#ffe9bd' },
+    ],
+    amb: 0x2a3a6e, ambI: 1.2,
+    hemiSky: 0x9fe8ff, hemiGround: 0x140b24, hemiI: 0.55,
+    key: 0xcfe9ff, keyI: 2.4,
+    rim: 0x8f7bff, rimI: 1.5,
+    fill: 0x6ee7f9, fillI: 0.9,
+    coreLight: 0xffc078, coreLightI: 18,
+    core: '#f2c98a', coreEmis: '#ffb866',
+    inner: '#fff3dd',
+    halo1: 'rgb(255,196,120)', halo2: 'rgb(255,225,180)',
+    dustA: 0xaee7ff, dustB: 0xffd98c,
+    ember: 0xffc078,
+    far: 0x9db4f0,
+  },
+
+  // 复古计算 · CRT 终端绿磷光：荧光绿环 + 琥珀核心，示波器/雷达观感
+  retro: {
+    ringPalette: [
+      { ring: '#3cff6e', glow: '#1fbf4e', marker: '#b7ffc9' }, // 环1 最外 · 磷光绿（带刻度）
+      { ring: '#7dffa3', glow: '#35d96a', marker: '#dcffe6' }, // 环2 · 亮磷光
+      { ring: '#26e05c', glow: '#14a844', marker: '#9bffb4' }, // 环3 · 终端绿
+      { ring: '#ffb000', glow: '#d88a00', marker: '#ffd98a' }, // 环4 · 琥珀警示环
+      { ring: '#c4ffd2', glow: '#5cff8c', marker: '#ffffff' }, // 环5 最内 · 高亮绿
+    ],
+    amb: 0x0d2a17, ambI: 1.3,
+    hemiSky: 0xb7ffc9, hemiGround: 0x050807, hemiI: 0.55,
+    key: 0xddffe6, keyI: 2.6,
+    rim: 0xffb000, rimI: 1.6,
+    fill: 0x3cff6e, fillI: 0.9,
+    coreLight: 0xffb000, coreLightI: 22,
+    core: '#c4ffd2', coreEmis: '#3cff6e',
+    inner: '#ffffff',
+    halo1: 'rgb(60,255,110)', halo2: 'rgb(255,176,0)',
+    dustA: 0x3cff6e, dustB: 0xffb000,
+    ember: 0xb7ffc9,
+    far: 0x7dffa3,
+  },
+};
 
 // 环参数：半径 / 管径 / 倾斜 / 基础转速 / 星点数量
 // spin:'x' 表示该环绕水平轴翻转（立起 / 侧倾），其余环绕竖直轴进动
 const RINGS = [
-  { radius: 3.02, tube: 0.06, tiltX: 0,    tiltZ: 14,  baseSpeed: 0.9,  markers: 8, markerSize: 0.07,  markerGlow: 1.3, spin: 'x' },
+  { radius: 3.02, tube: 0.06, tiltX: 0,    tiltZ: 14,  baseSpeed: 0.9,  markers: 8, ticks: 24, markerSize: 0.065, markerGlow: 1.35, spin: 'x' },
   { radius: 2.70, tube: 0.055,tiltX: 23.5, tiltZ: 4,   baseSpeed: -0.42, markers: 7 },
   { radius: 2.40, tube: 0.05, tiltX: -32,  tiltZ: 14,  baseSpeed: 0.52, markers: 8 },
   { radius: 2.12, tube: 0.047,tiltX: 52,   tiltZ: -10, baseSpeed: -0.46, markers: 6 },
@@ -45,6 +133,9 @@ export function createArmillary(container, options = {}) {
     speed = 1,               // 全局速度倍率
   } = options;
 
+  // 站点 SF 风格：'brass' 黄铜星图 / 'neon' 赛博霓虹 / 'aurora' 深空极光
+  const theme = THEMES[options.theme] || THEMES.brass;
+
   const hintEl = (typeof showHint === 'object' && showHint) ? showHint : null;
   const reduceMotion =
     typeof matchMedia === 'function' &&
@@ -66,6 +157,12 @@ export function createArmillary(container, options = {}) {
 
   // ==================== 场景与相机 ====================
   const scene = new THREE.Scene();
+
+  // 柔和环境反射：让高金属度环体呈现鲜亮金属色，避免发灰发暗
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environment = envTex;
+  pmrem.dispose();
   const w = () => container.clientWidth || 1;
   const h = () => container.clientHeight || 1;
 
@@ -94,24 +191,24 @@ export function createArmillary(container, options = {}) {
   }
   controls.update();
 
-  // ==================== 光照（冷主光 + 暖核心光） ====================
-  scene.add(new THREE.AmbientLight(0x2a3a6e, 1.2));
-  scene.add(new THREE.HemisphereLight(0x9fe8ff, 0x140b24, 0.55));
+  // ==================== 光照（随风格主题变化） ====================
+  scene.add(new THREE.AmbientLight(theme.amb, theme.ambI));
+  scene.add(new THREE.HemisphereLight(theme.hemiSky, theme.hemiGround, theme.hemiI));
 
-  const key = new THREE.DirectionalLight(0xcfe9ff, 2.4);
+  const key = new THREE.DirectionalLight(theme.key, theme.keyI);
   key.position.set(6, 4, 5);
   scene.add(key);
 
-  const rim = new THREE.DirectionalLight(0x8f7bff, 1.5); // 紫罗兰轮廓光
+  const rim = new THREE.DirectionalLight(theme.rim, theme.rimI);
   rim.position.set(-4, 3, -6);
   scene.add(rim);
 
-  const fill = new THREE.DirectionalLight(0x6ee7f9, 0.9);
+  const fill = new THREE.DirectionalLight(theme.fill, theme.fillI);
   fill.position.set(-2, -1, -4);
   scene.add(fill);
 
-  // ==================== 中心光源（暖金 · 照亮环体） ====================
-  const coreLight = new THREE.PointLight(0xffc078, 18, 6.5, 1.6);
+  // ==================== 中心光源（照亮环体） ====================
+  const coreLight = new THREE.PointLight(theme.coreLight, theme.coreLightI, 6.5, 1.6);
   coreLight.position.set(0, 0, 0);
   scene.add(coreLight);
 
@@ -180,19 +277,19 @@ export function createArmillary(container, options = {}) {
   const ringGroups = [];
 
   RINGS.forEach((def, i) => {
-    const palette = RING_PALETTE[i];
+    const palette = theme.ringPalette[i];
     const phase = PHASES[i];
 
     const tiltGroup = new THREE.Group();
     tiltGroup.rotation.x = THREE.MathUtils.degToRad(def.tiltX);
     tiltGroup.rotation.z = THREE.MathUtils.degToRad(def.tiltZ);
 
-    // 环体：细腻金属 + 微弱自发光
+    // 环体：做旧黄铜 + 微弱自发光（中等金属度，配合环境反射显色更鲜亮）
     const ringMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(palette.ring),
-      roughness: 0.28,
-      metalness: 0.85,
-      emissive: new THREE.Color(palette.glow).multiplyScalar(0.14),
+      roughness: 0.42,
+      metalness: 0.55,
+      emissive: new THREE.Color(palette.glow).multiplyScalar(0.22),
     });
     const torus = new THREE.Mesh(
       new THREE.TorusGeometry(def.radius, def.tube, 16, 128),
@@ -203,10 +300,10 @@ export function createArmillary(container, options = {}) {
 
     // 星点：小而精的发光珠（可逐环指定尺寸与亮度）
     const markerMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(palette.ring),
-      roughness: 0.2,
-      metalness: 0.6,
-      emissive: new THREE.Color(palette.glow).multiplyScalar(0.55),
+      color: new THREE.Color(palette.marker || palette.ring),
+      roughness: 0.24,
+      metalness: 0.5,
+      emissive: new THREE.Color(palette.glow).multiplyScalar(0.5),
       emissiveIntensity: def.markerGlow || 0.9,
     });
     const markerR = def.markerSize || (def.markers === 8 ? 0.052 : def.markers === 7 ? 0.048 : 0.045);
@@ -216,6 +313,24 @@ export function createArmillary(container, options = {}) {
       const marker = new THREE.Mesh(markerGeom, markerMat);
       marker.position.set(def.radius * Math.cos(a), 0, def.radius * Math.sin(a));
       tiltGroup.add(marker);
+    }
+
+    // 外环刻度：游标盘细刻度（古代天文仪器细节，仅最外环）
+    if (def.ticks) {
+      const tickMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(palette.marker || palette.ring),
+        roughness: 0.3,
+        metalness: 0.5,
+        emissive: new THREE.Color(palette.glow).multiplyScalar(0.35),
+      });
+      const tickGeom = new THREE.BoxGeometry(0.045, 0.012, 0.018);
+      for (let t = 0; t < def.ticks; t++) {
+        const a = (t / def.ticks) * Math.PI * 2;
+        const tick = new THREE.Mesh(tickGeom, tickMat);
+        tick.position.set(def.radius * Math.cos(a), 0.05, def.radius * Math.sin(a));
+        tick.rotation.y = -a;
+        tiltGroup.add(tick);
+      }
     }
 
     // 环上流动的星屑：沿环周圈流动的发光点，随环一起运动
@@ -241,18 +356,18 @@ export function createArmillary(container, options = {}) {
     mainGroup.add(tiltGroup);
   });
 
-  // ==================== 中心核心（暖金 · 呼吸） ====================
+  // ==================== 中心核心（琥珀 · 呼吸） ====================
   const coreMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color('#f2c98a'),
-    roughness: 0.18,
-    metalness: 0.65,
-    emissive: new THREE.Color('#ffb866'),
+    color: new THREE.Color(theme.core),
+    roughness: 0.2,
+    metalness: 0.45,
+    emissive: new THREE.Color(theme.coreEmis),
     emissiveIntensity: 1.5,
   });
   const core = new THREE.Mesh(new THREE.SphereGeometry(0.52, 48, 48), coreMat);
   mainGroup.add(core);
 
-  const innerGlowMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#fff3dd') });
+  const innerGlowMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(theme.inner) });
   const innerGlow = new THREE.Mesh(new THREE.SphereGeometry(0.34, 32, 32), innerGlowMat);
   mainGroup.add(innerGlow);
 
@@ -279,13 +394,13 @@ export function createArmillary(container, options = {}) {
     return sprite;
   }
 
-  const halo1 = glowSprite('rgb(255,196,120)', 4.4, 0.42);
-  const halo2 = glowSprite('rgb(255,225,180)', 2.7, 0.3);
+  const halo1 = glowSprite(theme.halo1, 4.4, 0.42);
+  const halo2 = glowSprite(theme.halo2, 2.7, 0.3);
   mainGroup.add(halo1);
   mainGroup.add(halo2);
 
   // ==================== 悬浮结构：无转轴、无底座，仅五环 + 中心球 ====================
-  // 极简的悬浮浑天仪形态，旋转更显轻盈
+  // 黄铜浑天仪悬浮形态，旋转更显轻盈（古代天文仪器 × 复古未来）
 
   // ==================== 粒子特效：环上星屑（已随环创建）+ 公转星尘 + 星核余烬 + 远空星野 ====================
 
@@ -315,10 +430,10 @@ export function createArmillary(container, options = {}) {
     return { geom, data, count };
   }
 
-  // 青蓝星尘（主层）
-  const dustA = makeOrbitParticles(260, 0xaee7ff, 0.26, 0.85, 3, 1.6, 4.6, 0.05, 0.21);
-  // 暖金星尘（点缀层，靠近核心更密）
-  const dustB = makeOrbitParticles(120, 0xffd98c, 0.22, 0.8, 4, 1.1, 3.2, 0.06, 0.24);
+  // 奶油金星尘（主层）
+  const dustA = makeOrbitParticles(260, theme.dustA, 0.26, 0.85, 3, 1.6, 4.6, 0.05, 0.21);
+  // 次星尘（点缀层，靠近核心更密）
+  const dustB = makeOrbitParticles(120, theme.dustB, 0.22, 0.8, 4, 1.1, 3.2, 0.06, 0.24);
 
   // 星核余烬：从核心向外脉动的细碎光点
   const emberCount = 48;
@@ -333,7 +448,7 @@ export function createArmillary(container, options = {}) {
   }
   emberGeom.setAttribute('position', new THREE.BufferAttribute(emberPos, 3));
   addSparkleAttrs(emberGeom, emberCount);
-  const embers = new THREE.Points(emberGeom, sparkleMaterial(0xffc078, 0.24, 0.9, 5));
+  const embers = new THREE.Points(emberGeom, sparkleMaterial(theme.ember, 0.24, 0.9, 5));
   mainGroup.add(embers);
 
   // 远空：静止星野（提供视差深度，微微闪烁）
@@ -350,7 +465,7 @@ export function createArmillary(container, options = {}) {
   }
   farGeom.setAttribute('position', new THREE.BufferAttribute(farPos, 3));
   addSparkleAttrs(farGeom, farCount);
-  const farParticles = new THREE.Points(farGeom, sparkleMaterial(0x9db4f0, 0.14, 0.55, 2));
+  const farParticles = new THREE.Points(farGeom, sparkleMaterial(theme.far, 0.14, 0.55, 2));
   scene.add(farParticles);
 
   // ==================== 交互与提示 ====================

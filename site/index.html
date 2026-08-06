@@ -20,7 +20,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="css/style.css?v=2">
+  <link rel="stylesheet" href="css/style.css?v=6">
   <script type="importmap">
     {
       "imports": {
@@ -33,24 +33,31 @@
 <body>
   <div data-nav></div>
 
-  <main class="container">
-    <!-- 英雄区 -->
-    <section class="hero" id="hero">
-      <!-- 五环浑天仪 · 标题下方背景层 -->
-      <div class="armillary-stage" id="armillary" aria-hidden="true"></div>
+  <!-- 英雄区（全宽铺满，独立于内容容器） -->
+  <section class="hero" id="hero">
+    <!-- 复古太阳射线 + 轨道装饰（背景层） -->
+    <div class="hero-rays" aria-hidden="true"></div>
+    <div class="hero-orbit" aria-hidden="true"><span class="orbit-dot"></span><span class="orbit-dot two"></span></div>
 
-      <div class="hero-inner">
-        <div class="hero-badge"><span class="badge-dot" aria-hidden="true"></span>Science &amp; Fiction · WZMS</div>
-        <h1><span id="hero-name">温州中学科学及幻想文学社</span></h1>
-        <p id="hero-intro">正在载入社团简介……</p>
-        <div class="hero-cta">
-          <a class="btn" href="activities.html">近期活动 <span aria-hidden="true">→</span></a>
-          <a class="btn ghost" href="about.html">了解我们</a>
-        </div>
-        <div class="hero-scroll" aria-hidden="true"><span></span></div>
+    <!-- 五环浑天仪 · 标题下方背景层 -->
+    <div class="armillary-stage" id="armillary" aria-hidden="true"></div>
+
+    <div class="hero-inner">
+      <div class="hero-badge"><span class="badge-dot" aria-hidden="true"></span>EST. 2024 · WZMS S&amp;F REGISTRY 057</div>
+      <h1><span id="hero-name">温州中学科学及幻想文学社</span></h1>
+      <p id="hero-intro">正在载入社团简介……</p>
+      <div class="hero-cta">
+        <a class="btn" href="activities.html">近期活动 <span aria-hidden="true">→</span></a>
+        <a class="btn ghost" href="about.html">了解我们</a>
       </div>
-    </section>
+      <div class="hero-scroll" aria-hidden="true"><span></span></div>
+    </div>
 
+    <!-- 观测坐标标注 -->
+    <div class="hero-coord" aria-hidden="true">N 28°00′ · E 120°41′ · WENZHOU OBSERVATORY</div>
+  </section>
+
+  <main class="container">
     <!-- 最新活动 -->
     <h2 class="section-title">近期活动</h2>
     <div class="grid" id="activities">
@@ -73,22 +80,39 @@
   <script src="js/supabase.js"></script>
   <script src="js/auth.js"></script>
 
-  <!-- 五环浑天仪 · 英雄区背景层 -->
+  <!-- 五环浑天仪 · 英雄区背景层（随 SF 风格切换配色） -->
   <script type="module">
     const stage = document.getElementById("armillary");
-    if (stage && typeof createArmillary === "undefined") {
+    let armillary = null;
+    const VALID_STYLES = ["brass", "neon", "aurora"];
+
+    function currentStyle() {
+      const s = document.documentElement.getAttribute("data-style") || "brass";
+      return VALID_STYLES.includes(s) ? s : "brass";
+    }
+
+    async function mountArmillary() {
+      if (!stage) return;
+      if (armillary) {
+        try { armillary.dispose(); } catch (e) { /* 忽略 */ }
+        armillary = null;
+      }
       try {
         const { createArmillary } = await import("./js/armillary.js");
-        window.__armillary = createArmillary(stage, {
+        armillary = createArmillary(stage, {
           interactive: false,
           wheelZoom: false,
           autoRotate: true,
+          theme: currentStyle(),
         });
       } catch (e) {
         console.warn("[浑天仪] 三维组件加载失败，舞台自动隐藏。", e);
         stage.classList.add("arm-failed");
       }
     }
+
+    window.addEventListener("wzsf:style", mountArmillary);
+    mountArmillary();
   </script>
   <script>
     (async function () {
