@@ -152,7 +152,8 @@ img { max-width: 100%; display: block; }
   opacity: 0.8;
 }
 .nav-inner {
-  max-width: var(--maxw);
+  /* 比正文容器更宽：登录态下导航含用户名/审核/退出，内容自然宽约 1153px，需保证一行 */
+  max-width: 1280px;
   margin: 0 auto;
   padding: 0.85rem 1.25rem;
   display: flex;
@@ -790,9 +791,9 @@ img { max-width: 100%; display: block; }
 
 /* ---------- 响应式 ---------- */
 
-/* 标题栏折叠断点：≤1180px 一律折叠为汉堡菜单，保证标题栏恒为一行。
-   原 720px 断点过低：721~1180px 间横向导航空间不足，登录按钮等被压缩换行、把标题栏撑成两行以上。 */
-@media (max-width: 1180px) {
+/* 标题栏折叠断点：≤1240px 一律折叠为汉堡菜单，保证标题栏恒为一行。
+   登录态下导航含用户名/审核/退出按钮，内容自然宽约 1153px，1220px 以下展开会挤压换行。 */
+@media (max-width: 1240px) {
   .nav-toggle { display: block; }
   .nav-links {
     display: none;
@@ -881,7 +882,7 @@ a.card:hover { text-decoration: none; }
 .auth-user {
   color: var(--accent);
   font-size: 0.9rem;
-  max-width: 10rem;
+  max-width: 8rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1466,7 +1467,7 @@ html[data-theme="light"] body::before {
 }
 html[data-theme="light"] body::after { opacity: 0.05; }
 html[data-theme="light"] .nav { background: rgba(246, 239, 223, 0.8); }
-@media (max-width: 1180px) {
+@media (max-width: 1240px) {
   html[data-theme="light"] .nav-links { background: rgba(246, 239, 223, 0.97); }
 }
 html[data-theme="light"] .hero::before {
@@ -1907,7 +1908,7 @@ html[data-style="neon"][data-theme="light"] ::-webkit-scrollbar-thumb {
   border: 2px solid var(--bg);
 }
 html[data-style="neon"][data-theme="light"] .nav { background: rgba(238, 242, 247, 0.82); }
-@media (max-width: 1180px) {
+@media (max-width: 1240px) {
   html[data-style="neon"][data-theme="light"] .nav-links { background: rgba(238, 242, 247, 0.97); }
 }
 /* 白昼赛博城市背景图 + 底扫网格 */
@@ -1992,7 +1993,7 @@ html[data-style="aurora"][data-theme="light"] ::-webkit-scrollbar-thumb {
   border: 2px solid var(--bg);
 }
 html[data-style="aurora"][data-theme="light"] .nav { background: rgba(238, 243, 251, 0.82); }
-@media (max-width: 1180px) {
+@media (max-width: 1240px) {
   html[data-style="aurora"][data-theme="light"] .nav-links { background: rgba(238, 243, 251, 0.97); }
 }
 /* 极昼背景图：冰蓝天空 + 淡色极光 */
