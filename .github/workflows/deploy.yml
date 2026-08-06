@@ -1,4 +1,6 @@
-# 推送到 main 分支后自动部署到 GitHub Pages
+# 推送到 main 分支后自动部署到 GitHub Pages（gh-pages 分支模式）
+# 说明：GitHub Pages 的 Source 需设置为 "Deploy from a branch" -> gh-pages。
+# 此方式直接推送构建产物到 gh-pages 分支，绕开 deploy-pages 云服务（曾多次超时）。
 name: Deploy to GitHub Pages
 
 on:
@@ -10,9 +12,7 @@ on:
     - cron: "*/30 * * * *"
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
@@ -35,19 +35,12 @@ jobs:
           fi
       - name: Generate article pages & share image
         run: node scripts/gen-article-pages.mjs || echo "::warning::文章静态页生成失败，使用仓库内已有文件"
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-      - name: Upload site artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        name: Deploy to Pages
-        uses: actions/deploy-pages@v4
+      - name: Deploy to gh-pages branch
+        run: |
+          cd site
+          touch .nojekyll
+          git init -b gh-pages
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "deploy: ${{ github.sha }}"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
+          git push -f origin gh-pages
