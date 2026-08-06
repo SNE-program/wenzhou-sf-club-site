@@ -1050,6 +1050,7 @@ a.card:hover { text-decoration: none; }
 
 /* 移动端：搜索框折叠为图标，聚焦时展开 */
 @media (max-width: 720px) {
+  .nav-search { min-width: 2rem; justify-content: flex-end; }
   .nav-search input {
     width: 0;
     padding: 0.34rem 0;
@@ -1066,6 +1067,14 @@ a.card:hover { text-decoration: none; }
   .nav-search:focus-within input::placeholder { opacity: 1; }
   .nav-search button { right: 0.05rem; }
   .nav-tools { gap: 0.35rem; }
+}
+
+/* 极窄屏（≤420px）：导航压缩品牌文字，保证按钮不重叠 */
+@media (max-width: 420px) {
+  .nav-inner { padding: 0.7rem 0.9rem; gap: 0.5rem; }
+  .brand { font-size: 1rem; gap: 0.45rem; }
+  .brand > span:not(.brand-mark) { display: none; }
+  .nav-tools { margin-left: 0; }
 }
 
 /* ---------- 分类 / 标签筛选 ---------- */
@@ -1112,10 +1121,12 @@ mark {
   display: flex;
   gap: 0.6rem;
   max-width: 36rem;
+  width: 100%;
   margin: 0 0 0.4rem;
 }
 .search-form input {
   flex: 1;
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 999px;
