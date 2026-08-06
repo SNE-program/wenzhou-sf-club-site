@@ -25,12 +25,14 @@
 
   <script src="js/common.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/auth.js"></script>
   <script>
     (async function () {
       const acts = await fetchSection("activities");
       document.querySelector("#activities").innerHTML = acts.length
         ? acts.map((it) => `
-          <article class="card">
+          <a class="card" href="article.html?id=${encodeURIComponent(it.id)}&type=activity">
             <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
             <div class="card-body">
               <h3>${esc(it.title)}</h3>
@@ -41,7 +43,7 @@
                 ${it.tags && it.tags.length ? it.tags.map((t) => `<span>#${esc(t)}</span>`).join("") : ""}
               </div>
             </div>
-          </article>`).join("")
+          </a>`).join("")
         : `<div class="state">暂无活动，敬请期待</div>`;
     })().catch((e) => {
       document.querySelector("#activities").innerHTML = `<div class="state">活动加载失败，请稍后刷新重试。</div>`;

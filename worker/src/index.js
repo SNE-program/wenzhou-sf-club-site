@@ -61,6 +61,7 @@ function propCover(p) {
 function mapActivity(row) {
   const p = row.properties || {};
   return {
+    id: row.id,
     title: propText(p["标题"]),
     date: propText(p["日期"]),
     location: propText(p["地点"]),
@@ -73,6 +74,7 @@ function mapActivity(row) {
 function mapWork(row) {
   const p = row.properties || {};
   return {
+    id: row.id,
     title: propText(p["标题"]),
     author: propText(p["作者"]),
     category: propText(p["分类"]),

@@ -1,5 +1,6 @@
 [
   {
+    "id": "work-1",
     "title": "《星际邮差》",
     "author": "社内投稿",
     "category": "短篇小说",
@@ -7,6 +8,7 @@
     "cover": null
   },
   {
+    "id": "work-2",
     "title": "《城市上空的鲸》",
     "author": "社内投稿",
     "category": "世界观设定",
@@ -14,6 +16,7 @@
     "cover": null
   },
   {
+    "id": "work-3",
     "title": "《黎明前的观测日志》",
     "author": "社内投稿",
     "category": "科普随笔",

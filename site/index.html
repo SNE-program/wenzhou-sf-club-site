@@ -36,6 +36,8 @@
 
   <script src="js/common.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/auth.js"></script>
   <script>
     (async function () {
       // 站点信息
@@ -53,7 +55,7 @@
         const acts = (await fetchSection("activities")).slice(0, 3);
         document.querySelector("#activities").innerHTML = acts.length
           ? acts.map((it) => `
-            <article class="card">
+            <a class="card" href="article.html?id=${encodeURIComponent(it.id)}&type=activity">
               <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
               <div class="card-body">
                 <h3>${esc(it.title)}</h3>
@@ -63,7 +65,7 @@
                   ${it.location ? `<span>${esc(it.location)}</span>` : ""}
                 </div>
               </div>
-            </article>`).join("")
+            </a>`).join("")
           : `<div class="state">暂无活动，敬请期待</div>`;
       } catch (e) { console.warn(e); }
 
@@ -72,7 +74,7 @@
         const works = (await fetchSection("works")).slice(0, 3);
         document.querySelector("#works").innerHTML = works.length
           ? works.map((it) => `
-            <article class="card">
+            <a class="card" href="article.html?id=${encodeURIComponent(it.id)}&type=works">
               <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
               <div class="card-body">
                 <h3>${esc(it.title)}</h3>
@@ -82,7 +84,7 @@
                   ${it.author ? `<span>${esc(it.author)}</span>` : ""}
                 </div>
               </div>
-            </article>`).join("")
+            </a>`).join("")
           : `<div class="state">暂无作品，期待你的投稿</div>`;
       } catch (e) { console.warn(e); }
     })();

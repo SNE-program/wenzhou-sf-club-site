@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>文章 · 温州中学科学及幻想文学社</title>
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <p><a class="back-link" id="back-link" href="index.html">← 返回</a></p>
+
+    <article class="detail" id="detail">
+      <div class="state"><div class="spinner"></div>正在加载文章……</div>
+    </article>
+
+    <!-- 表态区 -->
+    <section class="vote-box" id="vote-box" hidden>
+      <span class="vote-label">你的表态</span>
+      <button class="vote-btn" data-v="1" id="vote-up" type="button">▲ <span id="cnt-up">0</span></button>
+      <button class="vote-btn" data-v="-1" id="vote-down" type="button">▼ <span id="cnt-down">0</span></button>
+      <button class="vote-btn vote-reset" data-v="0" id="vote-reset" type="button">取消表态</button>
+      <span class="vote-hint" id="vote-hint"></span>
+    </section>
+
+    <!-- 评论区 -->
+    <section class="comments" id="comments-sec" hidden>
+      <h2 class="section-title">评论</h2>
+      <div class="comment-form" id="comment-form">
+        <textarea id="c-input" maxlength="500" rows="3" placeholder="写下你的想法…（登录后可评论）"></textarea>
+        <div class="c-bar">
+          <button class="btn" id="c-submit" type="button">发表评论</button>
+          <span class="c-hint" id="c-hint"></span>
+        </div>
+      </div>
+      <div id="c-list"></div>
+    </section>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const ARTICLE_ID = params.get("id") || "";
+    const TYPE = params.get("type") === "activity" ? "activities" : "works";
+
+    let article = null;
+    let myVote = null; // 当前用户表态：1 / -1 / 0 / null
+
+    function hint(elId, text, ok) {
+      const el = document.getElementById(elId);
+      if (el) {
+        el.textContent = text || "";
+        el.style.color = ok ? "var(--accent)" : "#f87171";
+      }
+    }
+
+    function timeLabel(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    // ---------- 文章渲染 ----------
+    function renderArticle() {
+      const box = document.getElementById("detail");
+      const metaBits = [];
+      if (article.date) metaBits.push(`📅 ${esc(dateLabel(article.date))}`);
+      if (article.location) metaBits.push(`📍 ${esc(article.location)}`);
+      if (article.category) metaBits.push(`🏷 ${esc(article.category)}`);
+      if (article.author) metaBits.push(`✍️ ${esc(article.author)}`);
+      if (article.tags && article.tags.length) metaBits.push(article.tags.map((t) => `#${esc(t)}`).join(" "));
+
+      box.innerHTML = `
+        <div class="card-cover detail-cover" style="${coverStyle(article, article.title)}">${initialOf(article.title)}</div>
+        <h1 class="detail-title">${esc(article.title)}</h1>
+        <div class="detail-meta">${metaBits.join(" · ")}</div>
+        <div class="detail-body"><p>${esc(article.summary)}</p></div>`;
+
+      const back = document.getElementById("back-link");
+      back.href = TYPE === "activities" ? "activities.html" : "works.html";
+      back.textContent = `← 返回${TYPE === "activities" ? "活动" : "作品"}`;
+      document.title = `${article.title} · 温州中学科学及幻想文学社`;
+      document.getElementById("vote-box").hidden = false;
+      document.getElementById("comments-sec").hidden = false;
+      loadVotes();
+      loadComments();
+    }
+
+    // ---------- 表态 ----------
+    async function loadVotes() {
+      try {
+        const [all] = await Promise.all([
+          SB.get("votes", `article_id=eq.${encodeURIComponent(ARTICLE_ID)}&select=value`),
+        ]);
+        let up = 0, down = 0, neutral = 0;
+        all.forEach((v) => { if (v.value === 1) up++; else if (v.value === -1) down++; else neutral++; });
+        document.getElementById("cnt-up").textContent = up;
+        document.getElementById("cnt-down").textContent = down;
+
+        const user = SB.user();
+        if (user) {
+          const mine = await SB.get("votes", `article_id=eq.${encodeURIComponent(ARTICLE_ID)}&user_id=eq.${user.id}&select=value`);
+          myVote = mine.length ? mine[0].value : null;
+        } else {
+          myVote = null;
+        }
+        renderVoteButtons();
+      } catch (e) {
+        hint("vote-hint", "表态加载失败：" + e.message);
+      }
+    }
+
+    function renderVoteButtons() {
+      const set = (btnId, active) => {
+        const b = document.getElementById(btnId);
+        if (b) b.classList.toggle("active", active);
+      };
+      set("vote-up", myVote === 1);
+      set("vote-down", myVote === -1);
+      set("vote-reset", myVote === 0);
+      hint("vote-hint", "");
+    }
+
+    async function setVote(v) {
+      const user = SB.user();
+      if (!user) {
+        hint("vote-hint", "请先登录后再表态");
+        window.openAuthModal("login");
+        return;
+      }
+      const q = `article_id=eq.${encodeURIComponent(ARTICLE_ID)}&user_id=eq.${user.id}`;
+      try {
+        const rows = await SB.get("votes", q + "&select=value");
+        if (rows.length) {
+          const next = rows[0].value === v ? 0 : v;
+          await SB.update("votes", { value: next, updated_at: new Date().toISOString() }, q);
+          myVote = next;
+        } else {
+          await SB.insert("votes", { article_id: ARTICLE_ID, user_id: user.id, value: v });
+          myVote = v;
+        }
+        renderVoteButtons();
+        // 刷新计数
+        const all = await SB.get("votes", `article_id=eq.${encodeURIComponent(ARTICLE_ID)}&select=value`);
+        let up = 0, down = 0;
+        all.forEach((x) => { if (x.value === 1) up++; else if (x.value === -1) down++; });
+        document.getElementById("cnt-up").textContent = up;
+        document.getElementById("cnt-down").textContent = down;
+        hint("vote-hint", "已记录你的表态", true);
+      } catch (e) {
+        hint("vote-hint", "操作失败：" + e.message);
+      }
+    }
+
+    // ---------- 评论 ----------
+    async function loadComments() {
+      const list = document.getElementById("c-list");
+      try {
+        const rows = await SB.get("comments", `article_id=eq.${encodeURIComponent(ARTICLE_ID)}&order=created_at.desc&select=*`);
+        // 加载昵称
+        const userIds = [...new Set(rows.map((r) => r.user_id))];
+        const nickMap = {};
+        if (userIds.length) {
+          const profs = await SB.get("profiles", `user_id=in.(${userIds.join(",")})&select=user_id,nickname`);
+          profs.forEach((p) => (nickMap[p.user_id] = p.nickname));
+        }
+        renderComments(rows, nickMap);
+        refreshCommentForm();
+      } catch (e) {
+        list.innerHTML = `<div class="state">评论加载失败：${esc(e.message)}</div>`;
+      }
+    }
+
+    function renderComments(rows, nickMap) {
+      const list = document.getElementById("c-list");
+      const user = SB.user();
+      if (!rows.length) {
+        list.innerHTML = `<p class="empty">还没有评论，来抢沙发吧。</p>`;
+        return;
+      }
+      list.innerHTML = rows.map((c) => {
+        const mine = user && c.user_id === user.id;
+        const nick = (mine ? (user.user_metadata && user.user_metadata.nickname) : "") || nickMap[c.user_id] || "匿名星友";
+        return `
+          <div class="comment-item" data-id="${c.id}">
+            <div class="c-head">
+              <span class="c-nick">${esc(nick)}</span>
+              <span class="c-time">${esc(timeLabel(c.created_at))}</span>
+              ${c.edited_at ? `<span class="c-edited">已编辑</span>` : ""}
+            </div>
+            <div class="c-content" data-role="content">${esc(c.content)}</div>
+            <div class="c-actions">
+              ${mine ? `<button class="c-btn" data-act="edit">编辑</button>
+                <button class="c-btn" data-act="delete">删除</button>` : ""}
+              <button class="c-btn" data-act="report">举报</button>
+            </div>
+          </div>`;
+      }).join("");
+
+      // 事件绑定
+      list.querySelectorAll(".comment-item").forEach((item) => {
+        const cid = item.dataset.id;
+        item.querySelectorAll("[data-act]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const act = btn.dataset.act;
+            if (act === "report") doReport(cid, btn);
+            else if (act === "edit") doEdit(item);
+            else if (act === "delete") doDelete(item);
+          });
+        });
+      });
+    }
+
+    function refreshCommentForm() {
+      const user = SB.user();
+      const input = document.getElementById("c-input");
+      if (user) {
+        input.disabled = false;
+        input.placeholder = "写下你的想法…";
+        document.getElementById("c-submit").hidden = false;
+      } else {
+        input.disabled = true;
+        input.placeholder = "登录后可评论";
+        document.getElementById("c-submit").hidden = true;
+      }
+    }
+
+    async function submitComment() {
+      const user = SB.user();
+      const input = document.getElementById("c-input");
+      const text = input.value.trim();
+      if (!user) { window.openAuthModal("login"); return; }
+      if (!text) { hint("c-hint", "请输入评论内容"); return; }
+      try {
+        await SB.insert("comments", { article_id: ARTICLE_ID, user_id: user.id, content: text });
+        input.value = "";
+        hint("c-hint", "评论已发布", true);
+        loadComments();
+      } catch (e) {
+        hint("c-hint", /duplicate|unique/i.test(e.message) ? "你已评论过这篇文章（可编辑或删除）" : "发布失败：" + e.message);
+      }
+    }
+
+    function doEdit(item) {
+      const content = item.querySelector('[data-role="content"]');
+      const original = content.textContent;
+      content.innerHTML = `<textarea class="edit-area" maxlength="500">${esc(original)}</textarea>`;
+      const save = document.createElement("button");
+      save.className = "btn";
+      save.textContent = "保存";
+      content.appendChild(save);
+      save.addEventListener("click", async () => {
+        const newText = content.querySelector("textarea").value.trim();
+        if (!newText) return;
+        try {
+          await SB.update(
+            "comments",
+            { content: newText, edited_at: new Date().toISOString() },
+            `id=eq.${item.dataset.id}`
+          );
+          loadComments();
+        } catch (e) {
+          hint("c-hint", "保存失败：" + e.message);
+        }
+      });
+    }
+
+    function doDelete(item) {
+      if (!confirm("确定删除这条评论吗？")) return;
+      SB.update("comments", { status: "deleted" }, `id=eq.${item.dataset.id}`)
+        .then(() => { hint("c-hint", "评论已删除", true); loadComments(); })
+        .catch((e) => hint("c-hint", "删除失败：" + e.message));
+    }
+
+    function doReport(cid) {
+      const user = SB.user();
+      if (!user) { window.openAuthModal("login"); return; }
+      const reason = prompt("请输入举报原因（如：言语不当）：");
+      if (!reason) return;
+      SB.insert("reports", { user_id: user.id, comment_id: cid, reason })
+        .then(() => alert("已提交举报，我们会尽快处理。"))
+        .catch((e) => alert("举报失败：" + e.message));
+    }
+
+    // ---------- 初始化 ----------
+    document.getElementById("vote-up").addEventListener("click", () => setVote(1));
+    document.getElementById("vote-down").addEventListener("click", () => setVote(-1));
+    document.getElementById("vote-reset").addEventListener("click", () => setVote(0));
+    document.getElementById("c-submit").addEventListener("click", submitComment);
+
+    (async function init() {
+      if (!ARTICLE_ID) {
+        document.getElementById("detail").innerHTML = `<div class="state">缺少文章参数</div>`;
+        return;
+      }
+      try {
+        const list = await fetchSection(TYPE);
+        article = list.find((x) => x.id === ARTICLE_ID);
+        if (!article) {
+          document.getElementById("detail").innerHTML = `<div class="state">文章不存在或已下架</div>`;
+          return;
+        }
+        renderArticle();
+      } catch (e) {
+        document.getElementById("detail").innerHTML = `<div class="state">文章加载失败：${esc(e.message)}</div>`;
+      }
+    })();
+  </script>
+</body>
+</html>
