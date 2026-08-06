@@ -22,12 +22,25 @@
 └── .github/workflows/     # GitHub Actions 自动部署
 ```
 
-## 当前状态（2026-08-05）
+## 当前状态（2026-08-06）
 
 - 线上地址：**https://sne-program.github.io/wenzhou-sf-club-site/**（GitHub Pages，推送 main 即自动更新）
 - Notion 数据中转 Worker 已部署：`wzsf-site-api`（Cloudflare），数据读取链路已本地验证通过
 - 说明：`*.workers.dev` 域名在国内部分网络不可达，因此前端暂未指向 Worker，网站显示本地占位数据；当网络可达时会自动读取 Notion 实时内容
 - **升级路径**：购买域名（约 ¥50~80/年）绑定到 Cloudflare 后，把 Worker 地址填到 `site/js/api.js` 的 `API_BASE` 即可切换到 Notion 实时数据
+
+## 已实现功能
+
+- 内容展示：首页（五环浑天仪三维动画）、活动、作品、成员、关于
+- 互动（Supabase）：注册/登录（邮箱验证）、入站审核（管理员审核页）、评论（每人每篇一条，可编辑/删除）、表态 up/down/no、举报
+- 分享卡片：所有页面含 OG meta；每条活动/作品自动生成静态详情页 `site/articles/<id>.html`（微信转发可正确显示卡片）
+- 主题：深空暗色 / 清新亮色一键切换，记忆选择，首次跟随系统
+- 筛选：作品按分类、活动按标签筛选（分类/标签反映在网址，可分享直达）
+- 搜索：导航搜索框 + 结果页（作品/活动分组、关键词高亮）
+
+## 静态文章页生成
+
+`site/articles/*.html` 由 `scripts/gen-article-pages.mjs` 根据 `site/data/*.json` 自动生成（含默认分享图 `site/images/og-default.png`），部署时由 GitHub Actions 自动执行。改动数据后可直接推送，无需本地手动生成。
 
 ## 内容更新方式
 

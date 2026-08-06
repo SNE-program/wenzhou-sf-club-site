@@ -5,6 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>404 · 温州中学科学及幻想文学社</title>
   <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      // 兜底：访问未生成的静态文章页时，自动跳转到动态文章页
+      try {
+        var m = location.pathname.match(/\/(articles\/)([^\/]+)\.html$/);
+        if (m) {
+          var id = m[2];
+          var type = /^act-/.test(id) ? "activity" : "works";
+          location.replace("article.html?id=" + encodeURIComponent(id) + "&type=" + type);
+        }
+      } catch (e) {}
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>

@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>入站审核 · 温州中学科学及幻想文学社</title>
   <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>

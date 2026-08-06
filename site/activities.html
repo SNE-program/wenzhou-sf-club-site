@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>活动 · 温州中学科学及幻想文学社</title>
   <meta name="description" content="社团活动一览：招新、读书会、观星、征文比赛……">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="社团活动 · 温州中学科学及幻想文学社">
+  <meta property="og:description" content="招新、读书会、观星夜、征文比赛…… 与我们共赴想象力的远征。">
+  <meta property="og:image" content="https://sne-program.github.io/wenzhou-sf-club-site/images/og-default.png">
+  <meta property="og:url" content="https://sne-program.github.io/wenzhou-sf-club-site/activities.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -15,6 +30,8 @@
       <h1>社团活动</h1>
       <div class="sub">招新、读书会、观星夜、征文比赛…… 与我们共赴想象力的远征。</div>
     </div>
+
+    <div class="filter-bar" id="act-filter" hidden></div>
 
     <div class="grid" id="activities">
       <div class="state"><div class="spinner"></div>正在加载活动……</div>
@@ -30,21 +47,64 @@
   <script>
     (async function () {
       const acts = await fetchSection("activities");
-      document.querySelector("#activities").innerHTML = acts.length
-        ? acts.map((it) => `
-          <a class="card" href="article.html?id=${encodeURIComponent(it.id)}&type=activity">
-            <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
-            <div class="card-body">
-              <h3>${esc(it.title)}</h3>
-              <p>${esc(it.summary)}</p>
-              <div class="card-meta">
-                <span>${esc(dateLabel(it.date))}</span>
-                ${it.location ? `<span>${esc(it.location)}</span>` : ""}
-                ${it.tags && it.tags.length ? it.tags.map((t) => `<span>#${esc(t)}</span>`).join("") : ""}
+
+      // ---------- 标签筛选 ----------
+      const filterBar = document.getElementById("act-filter");
+      const params = new URLSearchParams(location.search);
+      let current = (params.get("标签") || "").trim();
+
+      function unique(values) {
+        return [...new Set(values.filter(Boolean))];
+      }
+      const tags = unique(acts.flatMap((a) => a.tags || []));
+      if (tags.length) {
+        filterBar.hidden = false;
+        const chips = [{ label: "全部", value: "" }].concat(
+          tags.map((t) => ({ label: t, value: t }))
+        );
+        filterBar.innerHTML = chips
+          .map((c) => {
+            const count = c.value
+              ? acts.filter((a) => (a.tags || []).includes(c.value)).length
+              : acts.length;
+            return `<button class="filter-chip${c.value === current ? " active" : ""}" data-tag="${esc(c.value)}">
+              ${esc(c.label)}<span class="cnt">${count}</span>
+            </button>`;
+          })
+          .join("");
+        filterBar.addEventListener("click", (e) => {
+          const chip = e.target.closest(".filter-chip");
+          if (!chip) return;
+          current = chip.dataset.tag;
+          filterBar.querySelectorAll(".filter-chip").forEach((x) => x.classList.toggle("active", x === chip));
+          const url = new URL(location.href);
+          if (current) url.searchParams.set("标签", current);
+          else url.searchParams.delete("标签");
+          history.replaceState(null, "", url.pathname + url.search);
+          renderGrid();
+        });
+      }
+
+      // ---------- 活动网格 ----------
+      function renderGrid() {
+        const list = current ? acts.filter((a) => (a.tags || []).includes(current)) : acts;
+        document.querySelector("#activities").innerHTML = list.length
+          ? list.map((it) => `
+            <a class="card" href="articles/${encodeURIComponent(it.id)}.html">
+              <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
+              <div class="card-body">
+                <h3>${esc(it.title)}</h3>
+                <p>${esc(it.summary)}</p>
+                <div class="card-meta">
+                  <span>${esc(dateLabel(it.date))}</span>
+                  ${it.location ? `<span>${esc(it.location)}</span>` : ""}
+                  ${it.tags && it.tags.length ? it.tags.map((t) => `<span>#${esc(t)}</span>`).join("") : ""}
+                </div>
               </div>
-            </div>
-          </a>`).join("")
-        : `<div class="state">暂无活动，敬请期待</div>`;
+            </a>`).join("")
+          : `<div class="state">该标签下暂无活动，敬请期待</div>`;
+      }
+      renderGrid();
     })().catch((e) => {
       document.querySelector("#activities").innerHTML = `<div class="state">活动加载失败，请稍后刷新重试。</div>`;
       console.error(e);

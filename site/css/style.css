@@ -987,3 +987,220 @@ a.card:hover { text-decoration: none; }
 }
 .c-btn:hover { color: var(--accent); text-decoration: underline; }
 .empty { color: var(--text-dim); font-size: 0.9rem; margin-top: 1rem; }
+
+/* ============================================
+   扩展：主题切换 / 站内搜索 / 分类筛选 / 分享
+   ============================================ */
+
+/* ---------- 导航工具区：主题按钮 + 搜索框 ---------- */
+.nav-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 0.4rem;
+}
+.icon-btn {
+  width: 2.2rem;
+  height: 2.2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  font-size: 1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.2s, background 0.2s;
+}
+.icon-btn:hover { border-color: var(--accent); background: var(--surface-hover); }
+.nav-search { position: relative; display: flex; align-items: center; }
+.nav-search input {
+  width: 9.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.34rem 2rem 0.34rem 0.85rem;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s, width 0.25s;
+}
+.nav-search input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(110, 231, 249, 0.12);
+  width: 13.5rem;
+}
+.nav-search button {
+  position: absolute;
+  right: 0.15rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font-size: 1.05rem;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: color 0.2s;
+}
+.nav-search button:hover { color: var(--accent); }
+
+/* 移动端：搜索框折叠为图标，聚焦时展开 */
+@media (max-width: 720px) {
+  .nav-search input {
+    width: 0;
+    padding: 0.34rem 0;
+    border-color: transparent;
+    background: transparent;
+  }
+  .nav-search input::placeholder { opacity: 0; }
+  .nav-search:focus-within input {
+    width: 8.5rem;
+    padding: 0.34rem 2rem 0.34rem 0.85rem;
+    border-color: var(--border);
+    background: var(--surface);
+  }
+  .nav-search:focus-within input::placeholder { opacity: 1; }
+  .nav-search button { right: 0.05rem; }
+  .nav-tools { gap: 0.35rem; }
+}
+
+/* ---------- 分类 / 标签筛选 ---------- */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.7rem;
+  animation: fadeIn 0.5s ease both;
+}
+.filter-chip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 0.34rem 1rem;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+.filter-chip:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+.filter-chip.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  color: #05070f;
+  font-weight: 700;
+}
+.filter-chip .cnt { opacity: 0.72; font-size: 0.78rem; margin-left: 0.3rem; }
+
+/* ---------- 详情页分类 / 标签链接 ---------- */
+.meta-link { color: var(--accent); }
+.meta-link:hover { text-decoration: underline; }
+
+/* ---------- 搜索结果高亮 ---------- */
+mark {
+  background: rgba(245, 200, 119, 0.35);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 0.15em;
+}
+
+/* ---------- 搜索页 ---------- */
+.search-form {
+  display: flex;
+  gap: 0.6rem;
+  max-width: 36rem;
+  margin: 0 0 0.4rem;
+}
+.search-form input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.62rem 1.15rem;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.search-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(110, 231, 249, 0.12); }
+.search-stat { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 0.6rem; }
+.search-group-title {
+  margin: 1.7rem 0 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 400;
+}
+.search-group-title::before {
+  content: "";
+  width: 4px;
+  height: 1em;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+}
+.search-group-title .cnt { color: var(--text-dim); font-size: 0.8rem; font-family: var(--font-mono); }
+.search-none { color: var(--text-dim); padding: 3.2rem 0; text-align: center; }
+
+/* ============================================
+   亮色主题
+   ============================================ */
+html[data-theme="light"] {
+  --bg: #f5f8fd;
+  --bg-soft: #eef2fa;
+  --surface: rgba(30, 64, 175, 0.05);
+  --surface-hover: rgba(30, 64, 175, 0.09);
+  --border: rgba(30, 64, 175, 0.14);
+  --border-strong: rgba(30, 64, 175, 0.3);
+  --text: #1b2437;
+  --text-dim: #5b6b8c;
+  --accent: #0891b2;
+  --accent-2: #7c3aed;
+  --gold: #d97706;
+  --danger: #dc2626;
+  --shadow-glow: 0 0 0 1px rgba(8, 145, 178, 0.18),
+    0 18px 50px -18px rgba(8, 145, 178, 0.2);
+}
+html[data-theme="light"] body::before {
+  background:
+    radial-gradient(58rem 30rem at 88% -8%, rgba(124, 58, 237, 0.1), transparent 62%),
+    radial-gradient(46rem 26rem at 6% 4%, rgba(8, 145, 178, 0.1), transparent 55%),
+    radial-gradient(40rem 30rem at 50% 118%, rgba(59, 130, 246, 0.1), transparent 60%),
+    linear-gradient(180deg, #ffffff, var(--bg-soft));
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat;
+  background-size: auto, auto, auto, auto;
+  animation: none;
+}
+html[data-theme="light"] .nav { background: rgba(245, 248, 253, 0.78); }
+@media (max-width: 720px) {
+  html[data-theme="light"] .nav-links { background: rgba(245, 248, 253, 0.96); }
+}
+html[data-theme="light"] .hero::before {
+  background:
+    linear-gradient(180deg, rgba(245, 248, 253, 0.5), rgba(245, 248, 253, 0.72) 45%, var(--bg) 96%),
+    url("https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=deep%20space%20starfield%20with%20glowing%20cyan%20and%20violet%20nebula%20clouds%2C%20countless%20tiny%20bright%20stars%2C%20cinematic%20sci-fi%20atmosphere%2C%20dark%20navy%20blue%20sky%2C%20wide%20panoramic%20view&image_size=landscape_16_9"),
+    radial-gradient(60% 60% at 30% 20%, rgba(59, 130, 246, 0.18), transparent 70%);
+  background-size: cover, cover, cover;
+  background-position: center, center, center;
+}
+html[data-theme="light"] .hero p { color: var(--text-dim); }
+html[data-theme="light"] .armillary-stage { opacity: 0.42; }
+html[data-theme="light"] .modal-mask { background: rgba(30, 41, 59, 0.5); }
+html[data-theme="light"] .modal {
+  background: linear-gradient(180deg, #ffffff, #f3f6fc);
+  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.28);
+}
+html[data-theme="light"] .detail-body {
+  background: linear-gradient(180deg, rgba(30, 64, 175, 0.05), rgba(30, 64, 175, 0.025));
+}
+html[data-theme="light"] .footer::before { color: rgba(8, 145, 178, 0.05); }
+html[data-theme="light"] ::selection { background: rgba(8, 145, 178, 0.22); color: #101828; }
+html[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(8, 145, 178, 0.4), rgba(124, 58, 237, 0.4));
+  border: 2px solid var(--bg);
+}

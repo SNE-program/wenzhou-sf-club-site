@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>温州中学科学及幻想文学社</title>
   <meta name="description" content="温州中学科学及幻想文学社 —— 读科幻、写幻想、观星象、聊未来。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="温州中学科学及幻想文学社">
+  <meta property="og:description" content="读科幻、写幻想、观星象、聊未来。">
+  <meta property="og:image" content="https://sne-program.github.io/wenzhou-sf-club-site/images/og-default.png">
+  <meta property="og:url" content="https://sne-program.github.io/wenzhou-sf-club-site/">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="css/style.css">
   <script type="importmap">
     {
@@ -92,7 +107,7 @@
         const acts = (await fetchSection("activities")).slice(0, 3);
         document.querySelector("#activities").innerHTML = acts.length
           ? acts.map((it) => `
-            <a class="card" href="article.html?id=${encodeURIComponent(it.id)}&type=activity">
+            <a class="card" href="articles/${encodeURIComponent(it.id)}.html">
               <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
               <div class="card-body">
                 <h3>${esc(it.title)}</h3>
@@ -111,7 +126,7 @@
         const works = (await fetchSection("works")).slice(0, 3);
         document.querySelector("#works").innerHTML = works.length
           ? works.map((it) => `
-            <a class="card" href="article.html?id=${encodeURIComponent(it.id)}&type=works">
+            <a class="card" href="articles/${encodeURIComponent(it.id)}.html">
               <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
               <div class="card-body">
                 <h3>${esc(it.title)}</h3>

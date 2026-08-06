@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>作品 · 温州中学科学及幻想文学社</title>
   <meta name="description" content="社员原创科幻作品集：小说、设定、随笔……">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="社员作品 · 温州中学科学及幻想文学社">
+  <meta property="og:description" content="小说、设定、随笔——每一篇都始于一个脑洞。">
+  <meta property="og:image" content="https://sne-program.github.io/wenzhou-sf-club-site/images/og-default.png">
+  <meta property="og:url" content="https://sne-program.github.io/wenzhou-sf-club-site/works.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -15,6 +30,8 @@
       <h1>社员作品</h1>
       <div class="sub">小说、设定集、科普随笔 —— 每一篇都始于一个脑洞。</div>
     </div>
+
+    <div class="filter-bar" id="work-filter" hidden></div>
 
     <div class="grid" id="works">
       <div class="state"><div class="spinner"></div>正在加载作品……</div>
@@ -30,20 +47,64 @@
   <script>
     (async function () {
       const works = await fetchSection("works");
-      document.querySelector("#works").innerHTML = works.length
-        ? works.map((it) => `
-          <a class="card" href="article.html?id=${encodeURIComponent(it.id)}&type=works">
-            <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
-            <div class="card-body">
-              <h3>${esc(it.title)}</h3>
-              <p>${esc(it.summary)}</p>
-              <div class="card-meta">
-                <span>${esc(it.category || "未分类")}</span>
-                ${it.author ? `<span>${esc(it.author)}</span>` : ""}
+
+      // ---------- 分类筛选 ----------
+      const filterBar = document.getElementById("work-filter");
+      const params = new URLSearchParams(location.search);
+      let current = (params.get("分类") || "").trim();
+
+      function unique(values) {
+        return [...new Set(values.filter(Boolean))];
+      }
+      const categories = unique(works.map((w) => w.category));
+      if (categories.length) {
+        filterBar.hidden = false;
+        const chips = [{ label: "全部", value: "" }].concat(
+          categories.map((c) => ({ label: c, value: c }))
+        );
+        filterBar.innerHTML = chips
+          .map((c) => {
+            const count = c.value
+              ? works.filter((w) => w.category === c.value).length
+              : works.length;
+            return `<button class="filter-chip${c.value === current ? " active" : ""}" data-cat="${esc(c.value)}">
+              ${esc(c.label)}<span class="cnt">${count}</span>
+            </button>`;
+          })
+          .join("");
+        filterBar.addEventListener("click", (e) => {
+          const chip = e.target.closest(".filter-chip");
+          if (!chip) return;
+          current = chip.dataset.cat;
+          filterBar.querySelectorAll(".filter-chip").forEach((x) => x.classList.toggle("active", x === chip));
+          // 分类反映到网址，可分享直达
+          const url = new URL(location.href);
+          if (current) url.searchParams.set("分类", current);
+          else url.searchParams.delete("分类");
+          history.replaceState(null, "", url.pathname + url.search);
+          renderGrid();
+        });
+      }
+
+      // ---------- 作品网格 ----------
+      function renderGrid() {
+        const list = current ? works.filter((w) => w.category === current) : works;
+        document.querySelector("#works").innerHTML = list.length
+          ? list.map((it) => `
+            <a class="card" href="articles/${encodeURIComponent(it.id)}.html">
+              <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
+              <div class="card-body">
+                <h3>${esc(it.title)}</h3>
+                <p>${esc(it.summary)}</p>
+                <div class="card-meta">
+                  <span>${esc(it.category || "未分类")}</span>
+                  ${it.author ? `<span>${esc(it.author)}</span>` : ""}
+                </div>
               </div>
-            </div>
-          </a>`).join("")
-        : `<div class="state">暂无作品，期待你的投稿</div>`;
+            </a>`).join("")
+          : `<div class="state">该分类下暂无作品，期待你的投稿</div>`;
+      }
+      renderGrid();
     })().catch((e) => {
       document.querySelector("#works").innerHTML = `<div class="state">作品加载失败，请稍后刷新重试。</div>`;
       console.error(e);
