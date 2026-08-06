@@ -13,15 +13,65 @@
 // 审核通过后，Cloudflare Worker 定时任务（每 5 分钟）会自动：
 //   转录到正式作品库 + 回填作品ID + 发送"已上架"邮件；
 // 拒绝后会自动发送"未通过+原因"邮件。
+//
+// 重要：本文件所有中文字符串均以 \uXXXX 转义书写（纯 ASCII），
+// 避免在 Dashboard 中复制粘贴时编码被破坏导致 Notion 查询 400。
 // ============================================
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "jsr:@supabase/server@^1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const NOTION_TOKEN = Deno.env.get("NOTION_TOKEN") ?? "";
-const DB_SUBMISSIONS = Deno.env.get("DB_SUBMISSIONS") ?? "";
+const NOTION_TOKEN = (Deno.env.get("NOTION_TOKEN") ?? "").trim();
 const NOTION_VERSION = "2022-06-28";
+
+// DB_SUBMISSIONS：自动容错误填（如 Notion 页面/表单链接、32 位无连字符 ID、多余空格）
+// 都能正确提取出标准数据库 ID；提取不到则留空，后续请求会给出清晰报错。
+const _rawDb = (Deno.env.get("DB_SUBMISSIONS") ?? "").trim();
+const _dbMatch = _rawDb.match(/[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+const DB_SUBMISSIONS = _dbMatch
+  ? _dbMatch[0].replace(
+      /([0-9a-f]{8})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{12})/i,
+      "$1-$2-$3-$4-$5"
+    )
+  : "";
+
+// 中文字符串常量（\uXXXX 转义，粘贴安全）
+const S = {
+  status: "\u5ba1\u6838\u72b6\u6001", // 审核状态
+  pending: "\u5f85\u5ba1\u6838", // 待审核
+  approved: "\u5df2\u901a\u8fc7", // 已通过
+  rejected: "\u5df2\u62d2\u7edd", // 已拒绝
+  title: "\u4f5c\u54c1\u6807\u9898", // 作品标题
+  author: "\u4f5c\u8005\u7b14\u540d", // 作者笔名
+  types: "\u6295\u7a3f\u7c7b\u578b", // 投稿类型
+  body: "\u6b63\u6587\u5185\u5bb9", // 正文内容
+  cover: "\u5c01\u9762", // 封面
+  email: "\u90ae\u7bb1", // 邮箱
+  contests: "\u6240\u5c5e\u7ade\u8d5b", // 所属竞赛
+  created: "\u63d0\u4ea4\u65f6\u95f4", // 提交时间
+  rejectReason: "\u62d2\u7edd\u539f\u56e0", // 拒绝原因
+  notLogin: "\u672a\u767b\u5f55", // 未登录
+  noAdmin: "\u65e0\u7ba1\u7406\u5458\u6743\u9650", // 无管理员权限
+  queryFailed: "\u67e5\u8be2\u5931\u8d25", // 查询失败
+  patchFailed: "\u66f4\u65b0\u5931\u8d25", // 更新失败
+  missingArgs: "\u7f3a\u5c11\u53c2\u6570 action/id", // 缺少参数 action/id
+};
+
+/** 构造 Notion 请求头 */
+function notionHeaders() {
+  return {
+    Authorization: `Bearer ${NOTION_TOKEN}`,
+    "Notion-Version": NOTION_VERSION,
+    "Content-Type": "application/json",
+  };
+}
+
+/** 把 Notion 响应错误拼进抛出的错误信息，便于排查 */
+async function throwWithDetail(prefix, res) {
+  const detail = await res.text().catch(() => "");
+  throw new Error(`${prefix} ${res.status}${detail ? ": " + detail.slice(0, 300) : ""}`);
+}
 
 /** Notion 行 → 前端字段 */
 function mapRow(row) {
@@ -35,52 +85,60 @@ function mapRow(row) {
     if (v.type === "created_time") return v.created_time || "";
     return "";
   };
-  const cover = p["封面"] && p["封面"].files && p["封面"].files[0]
-    ? (p["封面"].files[0].type === "external"
-        ? p["封面"].files[0].external.url
-        : (p["封面"].files[0].file || {}).url || "")
-    : "";
+  const cover =
+    p[S.cover] && p[S.cover].files && p[S.cover].files[0]
+      ? p[S.cover].files[0].type === "external"
+        ? p[S.cover].files[0].external.url
+        : (p[S.cover].files[0].file || {}).url || ""
+      : "";
   return {
     id: row.id,
-    title: get("作品标题"),
-    author: get("作者笔名"),
-    types: get("投稿类型") || [],
-    body: get("正文内容"),
+    title: get(S.title),
+    author: get(S.author),
+    types: get(S.types) || [],
+    body: get(S.body),
     cover,
-    email: get("邮箱"),
-    contests: get("所属竞赛") || [],
-    created: get("提交时间"),
+    email: get(S.email),
+    contests: get(S.contests) || [],
+    created: get(S.created),
   };
 }
 
+/** 查询投稿箱中指定审核状态的投稿。filter 失败自动回退全量拉取 + 内存过滤。 */
 async function notionQuery(status) {
-  const res = await fetch(`https://api.notion.com/v1/databases/${DB_SUBMISSIONS}/query`, {
+  const url = `https://api.notion.com/v1/databases/${DB_SUBMISSIONS}/query`;
+  // 首选：带 filter 的查询（省流量）
+  const res = await fetch(url, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${NOTION_TOKEN}`,
-      "Notion-Version": NOTION_VERSION,
-      "Content-Type": "application/json",
-    },
+    headers: notionHeaders(),
     body: JSON.stringify({
       page_size: 50,
-      filter: { property: "审核状态", status: { equals: status } },
+      filter: { property: S.status, status: { equals: status } },
     }),
   });
-  if (!res.ok) throw new Error(`Notion 查询失败 ${res.status}`);
-  return (await res.json()).results || [];
+  if (res.ok) return (await res.json()).results || [];
+
+  // 回退：全量拉取后内存过滤（不依赖 filter 的 property 名）
+  const fb = await fetch(url, {
+    method: "POST",
+    headers: notionHeaders(),
+    body: JSON.stringify({ page_size: 100 }),
+  });
+  if (!fb.ok) await throwWithDetail(S.queryFailed, fb);
+  const rows = (await fb.json()).results || [];
+  return rows.filter((r) => {
+    const st = r.properties && r.properties[S.status] ? r.properties[S.status].status : null;
+    return st && st.name === status;
+  });
 }
 
 async function notionPatch(pageId, properties) {
   const res = await fetch(`https://api.notion.com/v1/pages/${pageId}`, {
     method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${NOTION_TOKEN}`,
-      "Notion-Version": NOTION_VERSION,
-      "Content-Type": "application/json",
-    },
+    headers: notionHeaders(),
     body: JSON.stringify({ properties }),
   });
-  if (!res.ok) throw new Error(`Notion 更新失败 ${res.status}`);
+  if (!res.ok) await throwWithDetail(S.patchFailed, res);
   return res.json();
 }
 
@@ -93,9 +151,12 @@ export default {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
     const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-    const { data: { user }, error: userErr } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser(token);
     if (userErr || !user) {
-      return Response.json({ error: "未登录" }, { status: 401 });
+      return Response.json({ error: S.notLogin }, { status: 401 });
     }
     const { data: me } = await supabase
       .from("profiles")
@@ -103,13 +164,13 @@ export default {
       .eq("user_id", user.id)
       .maybeSingle();
     if (!me || !me.is_admin) {
-      return Response.json({ error: "无管理员权限" }, { status: 403 });
+      return Response.json({ error: S.noAdmin }, { status: 403 });
     }
 
     // GET：待审核列表
     if (req.method === "GET") {
       try {
-        const rows = await notionQuery("待审核");
+        const rows = await notionQuery(S.pending);
         return Response.json(rows.map(mapRow));
       } catch (e) {
         return Response.json({ error: e.message }, { status: 502 });
@@ -126,14 +187,18 @@ export default {
       }
       const { action, id, reason } = body || {};
       if (!["approve", "reject"].includes(action) || !id) {
-        return Response.json({ error: "缺少参数 action/id" }, { status: 400 });
+        return Response.json({ error: S.missingArgs }, { status: 400 });
       }
       try {
         if (action === "approve") {
-          await notionPatch(id, { "审核状态": { status: { name: "已通过" } } });
+          await notionPatch(id, { [S.status]: { status: { name: S.approved } } });
         } else {
-          const properties = { "审核状态": { status: { name: "已拒绝" } } };
-          if (reason) properties["拒绝原因"] = { rich_text: [{ text: { content: String(reason).slice(0, 500) } }] };
+          const properties = { [S.status]: { status: { name: S.rejected } } };
+          if (reason) {
+            properties[S.rejectReason] = {
+              rich_text: [{ text: { content: String(reason).slice(0, 500) } }],
+            };
+          }
           await notionPatch(id, properties);
         }
         return Response.json({ ok: true });

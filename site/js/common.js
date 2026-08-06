@@ -2,8 +2,9 @@
 // 公共导航 / 页脚注入 + 当前页高亮 + 主题切换 + 站内搜索入口
 // ============================================
 (function () {
-  // 站点 API（Cloudflare Worker）地址，供 api.js 读取
-  window.SITE_API = window.SITE_API || "https://wzsf-site-api.wenzhou-sf.workers.dev";
+  // 站点数据已由 GitHub Actions 构建时从 Notion 生成静态 data/*.json（见 scripts/gen-site-data.mjs），
+  // 前端直接读取本地 JSON，不再依赖运行时 API（避免国内访问 *.workers.dev 被墙导致内容加载不出来）。
+  // 如需接入自定义域名的 API，可在部署前设置 window.SITE_API 覆盖默认值。
 
   const NAV_ITEMS = [
     { href: "index.html", label: "首页" },

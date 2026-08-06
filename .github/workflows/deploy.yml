@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # 定时重新拉取 Notion 数据并部署，保持内容新鲜（投稿闭环上架的作品也会自动出现）
+  schedule:
+    - cron: "*/30 * * * *"
 
 permissions:
   contents: read
@@ -21,6 +24,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Generate site data from Notion
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: |
+          if [ -z "$NOTION_TOKEN" ]; then
+            echo "::warning::未配置 NOTION_TOKEN secret，使用仓库内已有的 data/*.json"
+          else
+            node scripts/gen-site-data.mjs
+          fi
       - name: Generate article pages & share image
         run: node scripts/gen-article-pages.mjs || echo "::warning::文章静态页生成失败，使用仓库内已有文件"
       - name: Configure Pages

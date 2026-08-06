@@ -129,7 +129,13 @@ function buildOgImage() {
 // ---------- 文章页模板 ----------
 function articlePageHTML({ id, type, title, summary, date, image }) {
   const absUrl = `${BASE_URL}/articles/${encodeURIComponent(id)}.html`;
-  const img = image || `${BASE_URL}/images/og-default.png`;
+  // 封面可能是本地相对路径（images/covers/…）或绝对外链；og 分享需要绝对地址
+  const absImage = image
+    ? /^https?:\/\//i.test(image)
+      ? image
+      : `${BASE_URL}/${image.replace(/^\.\.\//, "")}`
+    : `${BASE_URL}/images/og-default.png`;
+  const img = absImage;
   const typeLabel = type === "activities" ? "活动" : "作品";
   const backHref = type === "activities" ? "../activities.html" : "../works.html";
   const siteDesc = summary || "温州中学科学及幻想文学社 —— 读科幻、写幻想、观星象、聊未来。";

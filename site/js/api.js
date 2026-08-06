@@ -14,10 +14,17 @@ const DATA_FILES = {
   members: "data/members.json",
 };
 
+// 3 秒超时兜底：即使 API 不可达，也绝不阻塞页面渲染
 async function getJSON(url) {
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!res.ok) throw new Error("HTTP " + res.status);
-  return res.json();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 3000);
+  try {
+    const res = await fetch(url, { headers: { Accept: "application/json" }, signal: ctrl.signal });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** 读取某一类数据；Worker 不可用时自动读本地占位数据 */
