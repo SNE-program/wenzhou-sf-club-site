@@ -74,6 +74,13 @@ const SB = {
     }
     this.clearSession();
   },
+  // 发送密码重置邮件（GoTrue /auth/v1/recover）
+  async recover(email) {
+    return this.request("/auth/v1/recover", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
 
   // ---- 数据（PostgREST）----
   get(table, query) {

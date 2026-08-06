@@ -159,6 +159,7 @@ img { max-width: 100%; display: block; }
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  flex-wrap: nowrap;
 }
 .brand {
   font-family: var(--font-display);
@@ -788,7 +789,10 @@ img { max-width: 100%; display: block; }
 .error-page p { color: var(--text-dim); margin: 1.2rem 0 2.2rem; }
 
 /* ---------- 响应式 ---------- */
-@media (max-width: 720px) {
+
+/* 标题栏折叠断点：≤1180px 一律折叠为汉堡菜单，保证标题栏恒为一行。
+   原 720px 断点过低：721~1180px 间横向导航空间不足，登录按钮等被压缩换行、把标题栏撑成两行以上。 */
+@media (max-width: 1180px) {
   .nav-toggle { display: block; }
   .nav-links {
     display: none;
@@ -807,6 +811,26 @@ img { max-width: 100%; display: block; }
   .nav-links.open { display: flex; }
   .nav-links a { padding: 0.6rem 0.9rem; border-radius: 10px; }
   .nav-links a::after { display: none; }
+  .nav-search { min-width: 2rem; justify-content: flex-end; }
+  .nav-search input {
+    width: 0;
+    padding: 0.34rem 0;
+    border-color: transparent;
+    background: transparent;
+  }
+  .nav-search input::placeholder { opacity: 0; }
+  .nav-search:focus-within input {
+    width: 8.5rem;
+    padding: 0.34rem 2rem 0.34rem 0.85rem;
+    border-color: var(--border);
+    background: var(--surface);
+  }
+  .nav-search:focus-within input::placeholder { opacity: 1; }
+  .nav-search button { right: 0.05rem; }
+  .nav-tools { gap: 0.35rem; }
+}
+
+@media (max-width: 720px) {
   .hero { padding: 3.2rem 0 2.6rem; }
   .hero-orbit { right: -7rem; width: 60vw; opacity: 0.7; }
   .hero-coord { display: none; }
@@ -958,6 +982,21 @@ a.card:hover { text-decoration: none; }
   text-align: center;
   line-height: 1.7;
 }
+.form-link {
+  margin-top: 0.8rem;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.form-link a { color: var(--text-dim); }
+.form-link a:hover { color: var(--accent); text-decoration: underline; }
+#auth-reset > p:first-child {
+  margin-bottom: 0.9rem;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  line-height: 1.7;
+}
+#auth-reset .btn { margin-top: 0.4rem; }
+#auth-reset .btn.ghost { margin-top: 0.55rem; }
 .auth-tag {
   font-size: 0.72rem;
   color: var(--gold);
@@ -1427,7 +1466,7 @@ html[data-theme="light"] body::before {
 }
 html[data-theme="light"] body::after { opacity: 0.05; }
 html[data-theme="light"] .nav { background: rgba(246, 239, 223, 0.8); }
-@media (max-width: 720px) {
+@media (max-width: 1180px) {
   html[data-theme="light"] .nav-links { background: rgba(246, 239, 223, 0.97); }
 }
 html[data-theme="light"] .hero::before {
@@ -1868,7 +1907,7 @@ html[data-style="neon"][data-theme="light"] ::-webkit-scrollbar-thumb {
   border: 2px solid var(--bg);
 }
 html[data-style="neon"][data-theme="light"] .nav { background: rgba(238, 242, 247, 0.82); }
-@media (max-width: 720px) {
+@media (max-width: 1180px) {
   html[data-style="neon"][data-theme="light"] .nav-links { background: rgba(238, 242, 247, 0.97); }
 }
 /* 白昼赛博城市背景图 + 底扫网格 */
@@ -1953,7 +1992,7 @@ html[data-style="aurora"][data-theme="light"] ::-webkit-scrollbar-thumb {
   border: 2px solid var(--bg);
 }
 html[data-style="aurora"][data-theme="light"] .nav { background: rgba(238, 243, 251, 0.82); }
-@media (max-width: 720px) {
+@media (max-width: 1180px) {
   html[data-style="aurora"][data-theme="light"] .nav-links { background: rgba(238, 243, 251, 0.97); }
 }
 /* 极昼背景图：冰蓝天空 + 淡色极光 */

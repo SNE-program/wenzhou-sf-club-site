@@ -89,9 +89,18 @@
           <label>邮箱<input type="email" id="f-email" required placeholder="you@example.com" autocomplete="email"></label>
           <label>昵称<span class="only-signup">（用于展示）</span><input type="text" id="f-nick" class="only-signup" placeholder="如：星尘" maxlength="20"></label>
           <label>密码<input type="password" id="f-pass" required placeholder="至少 6 位" autocomplete="new-password"></label>
+          <label>确认密码<span class="only-signup">（再次输入）</span><input type="password" id="f-pass2" class="only-signup" placeholder="再次输入密码" autocomplete="new-password"></label>
           <p class="form-err" id="f-err" hidden></p>
           <button class="btn" type="submit" id="f-submit">登录</button>
+          <div id="auth-reset" hidden>
+            <p>忘记密码？输入你的邮箱，我们将发送一封密码重置链接。</p>
+            <p class="form-err" id="r-err" hidden></p>
+            <p class="form-ok" id="r-ok" hidden></p>
+            <button class="btn" type="button" id="r-send">发送重置链接</button>
+            <button class="btn ghost" type="button" id="r-back">返回登录</button>
+          </div>
           <p class="form-note">仅记录邮箱与昵称，不采集真实姓名、学号或手机号。注册后需完成邮箱验证并经管理员审核，通过后方可评论、表态。</p>
+          <p class="form-link"><a href="#" id="f-forgot">忘记密码？</a></p>
         </form>
       </div>`;
     document.body.appendChild(modalEl);
@@ -101,20 +110,79 @@
     modalEl.querySelector(".modal-close").addEventListener("click", closeModal);
 
     const tabs = modalEl.querySelectorAll(".tab");
+    const form = modalEl.querySelector("#auth-form");
+    const resetBox = document.getElementById("auth-reset");
+    const emailLabel = document.getElementById("f-email").closest("label");
+
     const switchMode = (m) => {
       tabs.forEach((t) => t.classList.toggle("active", t.dataset.mode === m));
       document.querySelectorAll(".only-signup").forEach((el) => (el.hidden = m !== "signup"));
       document.getElementById("f-submit").textContent = m === "signup" ? "注册" : "登录";
-      if (m === "login") document.getElementById("f-nick").removeAttribute("required");
-      else document.getElementById("f-nick").setAttribute("required", "required");
+      document.getElementById("f-nick").required = m === "signup";
+      document.getElementById("f-pass2").required = m === "signup";
+      document.getElementById("f-forgot").hidden = m !== "login";
+      // 退出“忘记密码”视图，恢复常规表单
+      modalEl.querySelector(".modal-tabs").hidden = false;
+      resetBox.hidden = true;
+      form.querySelectorAll("label").forEach((l) => (l.hidden = false));
+      document.getElementById("f-submit").hidden = false;
     };
     tabs.forEach((t) => t.addEventListener("click", () => switchMode(t.dataset.mode)));
     switchMode(mode);
 
+    // 找回密码：切换为“仅邮箱”视图
+    const showReset = (e) => {
+      if (e) e.preventDefault();
+      form.querySelectorAll("label").forEach((l) => {
+        l.hidden = l !== emailLabel;
+      });
+      document.getElementById("f-submit").hidden = true;
+      document.getElementById("f-forgot").hidden = true;
+      document.getElementById("f-err").hidden = true;
+      modalEl.querySelector(".modal-tabs").hidden = true;
+      resetBox.hidden = false;
+    };
+
+    const handleRecover = async () => {
+      const email = document.getElementById("f-email").value.trim();
+      const rErr = document.getElementById("r-err");
+      const rOk = document.getElementById("r-ok");
+      const send = document.getElementById("r-send");
+      rErr.hidden = true;
+      rOk.hidden = true;
+      if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+        rErr.textContent = "请输入有效的邮箱地址";
+        rErr.hidden = false;
+        return;
+      }
+      send.disabled = true;
+      send.textContent = "发送中…";
+      try {
+        await SB.recover(email);
+        rOk.textContent = "重置链接已发送至你的邮箱，请查收并按邮件提示设置新密码。";
+        rOk.hidden = false;
+      } catch (err) {
+        rErr.textContent = String(err.message || "发送失败，请重试");
+        rErr.hidden = false;
+      } finally {
+        send.disabled = false;
+        send.textContent = "发送重置链接";
+      }
+    };
+
+    document.getElementById("f-forgot").addEventListener("click", showReset);
+    document.getElementById("r-send").addEventListener("click", handleRecover);
+    document.getElementById("r-back").addEventListener("click", () => openModal("login"));
+
     modalEl.querySelector("form").addEventListener("submit", async (e) => {
       e.preventDefault();
+      // 找回密码视图下，回车直接发送重置链接
+      if (!document.getElementById("auth-reset").hidden) {
+        return handleRecover();
+      }
       const email = document.getElementById("f-email").value.trim();
       const pass = document.getElementById("f-pass").value;
+      const pass2 = document.getElementById("f-pass2").value;
       const nick = document.getElementById("f-nick").value.trim();
       const errEl = document.getElementById("f-err");
       const submit = document.getElementById("f-submit");
@@ -126,6 +194,7 @@
       try {
         if (isSignup) {
           if (pass.length < 6) throw new Error("密码至少 6 位");
+          if (pass !== pass2) throw new Error("两次输入的密码不一致");
           const data = await SB.signUp(email, pass, nick || "星尘");
           if (data.session) {
             // 未开启邮箱确认时的自动登录（保留兼容）
