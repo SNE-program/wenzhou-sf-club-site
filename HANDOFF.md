@@ -5,17 +5,16 @@
 
 ## 当前状态
 
-⚠️ **E2E 测试 39/41 通过（与上一轮基线一致）；剩余 2 项均需人工介入（非代码缺陷）。新增环境问题：GitHub Actions 基础设施中断导致部署滞留（详见下文「新增发现」）。**
+⚠️ **E2E 测试 39/41 通过（与基线一致）；剩余 2 项均需人工介入（非代码缺陷）。GitHub Actions 已恢复，部署已成功推送 gh-pages 分支，等待 GitHub Pages 发布。** 
 
 - 全部核心业务链路已跑通并通过本地测试（静态站点、主题/风格切换、登录/登出、管理员审核、表态、评论增查改删举报、竞赛管理、Notion 数据链路）。
 - 剩余 2 项失败均为**环境/基础设施层问题**，代码侧已做优雅降级，部署环境配置完成后即可全绿。
-- **本轮新增发现**：GitHub 官方状态处于 *Partial System Outage*（Actions 队列滞留），
-  上一轮（进程 #1）推送的 `4c98854`、`bfbe2ba` 提交**未触发任何 workflow 运行**（API 查询 total_count=0），
-  线上 gh-pages 目前仍是旧版本（缺少 `4c98854` 中的导航 CSS 修复）。
-  进程 #2 曾 `workflow_dispatch` 触发部署（运行 31126692510），该运行执行后 build 任务被
-  基础设施取消（与 17:41Z 的 schedule 运行相同模式），**确认是 GitHub 侧问题而非代码问题**；
-  进程 #2 的 HANDOFF 提交（`9f0660d`）推送后同样未触发运行。
-  **GitHub 恢复后需重新触发部署**（见「对下一个 AI 的建议」#0）。
+- **本轮（进程 #3）新增发现**：
+  - GitHub 官方中断已恢复（滞留的 dispatch 运行 31126692510 已结束，结论 failure=cancelled 属旧中断遗留）。
+  - 已重新 `workflow_dispatch`（ref=main，head **56e1c74**，运行 31127313616）→ **conclusion=success**，gh-pages 分支已更新至 `bea6b92`（含 4c98854 的导航 CSS 修复）。
+  - 线上站点发布由 GitHub 自动的「pages build and deployment」执行（运行 31127318150 曾滞留 queued 数十分钟），**发布完成后**线上 CSS 应含 `.nav-links a` 的 `flex-shrink:0; white-space:nowrap` 修复（gh-pages 分支已验证包含，线上需等发布）。
+  - **T6.1 根因升级（重要）**：确认 GoTrue 会校验注册邮箱域名的 **MX 记录**——`example.com` 为 **null MX**（RFC 7505，明确不收邮件）→ 恒被拒为「Email address is invalid」；`wzsf.local` 无公网 MX 同理。`qq.com` / `gmail.com` 等有正常 MX 可通过校验。**已修正 E2E 临时脚本注册邮箱为 `@qq.com`**（仅改 `_tmp/e2e_test.py`，不入库）。
+  - T6.1 剩余阻塞仅为 Supabase 邮件发送限流（429 `over_email_send_rate_limit`，跨多进程持续，判定为共享/环境级限流），解除后重跑预期通过。
 
 ## 已完成的工作
 
@@ -35,7 +34,7 @@
 | Notion | Worker 5/5 端点（site/activities/works/contests/members）本地验证通过 | ✅ |
 | 竞赛 | anon 只读 200、管理员 CRUD 201/200、普通用户写 403 | ✅ |
 
-### 修复过的问题（本轮）
+### 修复过的问题（历史轮次）
 1. **评论软删除 403（RLS 缺陷，T9.7）**
    - 根因：`comments_select` 策略 `USING (status='active')`，UPDATE 将评论置为 `deleted` 后，新行无法通过 SELECT 策略，PostgreSQL 拒绝更新。
    - 修复：`scripts/supabase-setup.mjs` 中策略改为 `USING (status = 'active' OR auth.uid() = user_id)`（作者可见自己的评论）；前端 `site/js/article.js` 查询加 `status=eq.active` 过滤。
@@ -44,7 +43,7 @@
 3. **Edge Function 缺环境变量返回裸 500 且无 CORS 头（T11）**
    - 修复：`scripts/send-audit-email.ts`、`scripts/submission-review.ts` 增加 `envCheck()`，缺变量时返回 501 + 带 CORS 头 + 中文提示文案。
    - 注意：**此修复需重新部署函数后生效**（见「需人工」#2）。
-4. **导航栏品牌文字登录态下折行**：`site/css/style.css` 修复（上一轮遗留，本轮一并提交）。
+4. **导航栏品牌文字登录态下折行**：`site/css/style.css` 修复（已随 4c98854 提交，gh-pages 已含，待线上发布）。
 5. `.gitignore` 增加 `/_*.mjs`，防止含数据库凭据的临时脚本被提交。
 
 ### 环境准备
@@ -52,39 +51,36 @@
 - 本地服务：`node scripts/serve.mjs`（端口 8080）。
 - E2E：`python _tmp/e2e_test.py`（Playwright headless Chromium），结果写入 `_tmp/e2e_results.json`。注意 E2E 依赖 `_tmp` 下的临时脚本预置用户，需先运行 `_setup_e2e.mjs` / `_mkuser.mjs`（见「注意事项」）。
 
-### 本轮（自动化 AI 进程 #2）新增工作
+### 本轮（自动化 AI 进程 #3）新增工作
 | 项 | 内容 | 结果 |
 |---|---|---|
-| E2E 重跑 | 39/41，与基线一致（`_tmp/e2e_run_new.log`） | ✅ |
-| T6.1 根因深挖 | GoTrue 先查邮件限流再校验邮箱：当前恒返 429 `over_email_send_rate_limit`；`wzsf.local` 假域名在限流解除时会被 GoTrue 以「Email address is invalid」拒绝。**非产品缺陷**（真实用户用真实邮箱不受影响） | 🔎 |
-| T11 修复验证 | 已部署函数仍为旧版（返回裸 500/400 且无 CORS 头）；仓库内已提交的 envCheck 修复**经验证正确**：`jsr:@supabase/server` 的 `withSupabase` 默认 `addCorsHeaders` 会给**所有** handler 响应（含错误响应）附加 `Access-Control-Allow-Origin: *`，部署后浏览器将不再报 CORS 错误 | ✅ 代码侧完备 |
-| Worker 部署核验 | 用 Cloudflare API Token（`权限.txt`）执行 `wrangler deployments list`：`wzsf-site-api` 已部署（2026-08-06 创建）；`*.workers.dev` 域名从本网络不可达属预期（README 已注明） | ✅ |
-| 线上站点冒烟 | `https://sne-program.github.io/wenzhou-sf-club-site/` 首页/作品/竞赛页 title+hero 正常，**0 个 JS 错误**（Playwright 实测） | ✅ |
-| E2E 脚本修正 | `_tmp/e2e_test.py` 注册邮箱域名 `@wzsf.local` → `@example.com`（避免 GoTrue 校验误报，使失败原因显示为真实的「限流」；限流解除后该用例可直接通过）。仅改临时脚本，不入库 | ✅ |
-| 部署链路排障 | 见「当前状态」：GitHub Actions 中断 → 推送未触发运行 → 已手动 dispatch（运行 31126692510，queued） | ⚠️ 待恢复 |
+| E2E 重跑 | 39/41，与基线一致（`_tmp/e2e_run_p3.log`） | ✅ |
+| 部署恢复处理 | GitHub Actions 已恢复；重新 dispatch（运行 31127313616，head 56e1c74）**成功**；gh-pages 分支已更新至 bea6b92 | ✅ |
+| T6.1 根因升级 | 确认 GoTrue 校验邮箱域名 **MX 记录**（example.com=null MX、wzsf.local 无 MX → 恒 invalid）；已把 E2E 临时脚本注册邮箱改为 `@qq.com` | ✅ 代码侧完备 |
+| T11 复核 | 管理员 JWT 直调 `send-audit-email`：仍返回**裸 500、无 CORS 头** → 已部署函数仍为旧版，需人工在控制台配环境变量并 Deploy（仓库内 envCheck 修复经验证正确） | 🔎 需人工 |
+| 限流复核 | 多域名（example/gmail/qq）均 429 `over_email_send_rate_limit`，跨进程持续数小时 → 共享/环境级限流，非代码问题 | 🔎 环境 |
 
 ## 跳过的链路及原因
 
 | 项 | 原因分类 | 说明 |
 |---|---|---|
-| T6.1 注册发送验证邮件（429） | **需人工/可重试** | Supabase GoTrue 邮件发送持续命中环境级限流（429 `over_email_send_rate_limit`，多轮探测确认）。注册链路本身逻辑正常（pending 用户创建成功）。另注：`wzsf.local` 假域名在限流解除时会被 GoTrue 判定邮箱无效——本轮已将 E2E 脚本注册邮箱改为 `@example.com`，限流解除后重跑 T6.1 预期通过。 |
-| T11 Edge Function 无 CORS 头（500） | **需人工** | 远端函数缺 `RESEND_API_KEY` / `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 环境变量（已部署版本返回裸 500/400 且无 CORS 头）。本环境无 Supabase CLI / 控制台权限，无法配置并重新 Deploy。代码修复（envCheck→501）已在仓库且经验证正确（withSupabase 默认自动加 CORS 头），**在控制台配好环境变量并重新 Deploy 即修复**。 |
-| GitHub Actions 部署滞留（gh-pages 为旧版） | **环境/可重试** | GitHub 处于 Partial System Outage，`4c98854`/`bfbe2ba` 推送未触发运行；已手动 dispatch（运行 31126692510）滞留 queued。恢复后运行自动执行；若被丢弃需重触发（见下方建议 #1）。线上站点功能正常（冒烟通过），仅缺导航 CSS 修复等小改动。 |
+| T6.1 注册发送验证邮件（429） | **需人工/可重试** | Supabase GoTrue 邮件发送持续命中环境级限流（429 `over_email_send_rate_limit`，跨进程持续数小时，判定共享/环境级限流）。注册链路本身逻辑正常。**根因补充（进程 #3）**：GoTrue 校验邮箱域名 **MX 记录**，`example.com`（null MX）/`wzsf.local` 恒被判无效；E2E 临时脚本已改用 `@qq.com`（有真实 MX）。限流解除后重跑 T6.1 预期通过。 |
+| T11 Edge Function 无 CORS 头（500） | **需人工** | 远端函数缺 `RESEND_API_KEY` / `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 环境变量（进程 #3 用管理员 JWT 复核：仍返回裸 500 且无 CORS 头）。本环境无 Supabase CLI / 控制台权限，无法配置并重新 Deploy。代码修复（envCheck→501）已在仓库且经验证正确（withSupabase 默认自动加 CORS 头），**在控制台配好环境变量并重新 Deploy 即修复**。 |
+| GitHub Pages 发布排队（线上为旧版） | **环境/可重试** | GitHub 中断已恢复；`workflow_dispatch`（head 56e1c74）**已成功**，gh-pages 分支已更新至 bea6b92（含导航 CSS 修复）。线上发布由 GitHub 自动「pages build and deployment」执行（运行 31127318150，曾滞留 queued 数十分钟）。**若长时间未完成，重触发：** push 一个空提交或再次 dispatch。发布完成后线上 CSS 应含 `.nav-links a` 的 `flex-shrink:0; white-space:nowrap`。 |
 
 ## 对下一个 AI 的建议
 
-0. **最高优先级（可自动完成）**：GitHub 恢复后重新触发部署：
-   `POST /repos/SNE-program/wenzhou-sf-club-site/actions/workflows/327989111/dispatches`，body `{"ref":"main"}`（用 `权限.txt` 的 GitHub Token）。
-   触发后轮询 `GET /actions/runs?per_page=3` 直到出现 head_sha=`9f0660d` 且 conclusion=success；
-   然后校验 gh-pages 分支与线上站点已含 `4c98854` 的导航 CSS 修复（站点首页 `.nav a` 间距）与 `9f0660d` 的 HANDOFF 文档。
-   注意：中断期间推送与 dispatch 都可能被丢弃或取消，需在恢复后重试。
-1. **次高优先级（可自动完成）**：在 Supabase 控制台为两个 Edge Function（`send-audit-email`、`submission-review`）配置环境变量并重新 Deploy：
+0. **最高优先级（可自动完成）**：验证线上站点已发布新版本：
+   - 检查运行 31127318150（pages build and deployment）是否 conclusion=success；
+   - 抓取 `https://sne-program.github.io/wenzhou-sf-club-site/css/style.css`，确认 `.nav-links a` 含 `flex-shrink: 0; white-space: nowrap;`（即 4c98854 导航 CSS 修复）；
+   - 若线上仍为旧版且运行已取消/失败，重新 `workflow_dispatch`（`POST /actions/workflows/327989111/dispatches`，body `{"ref":"main"}`，用 `权限.txt` 的 GitHub Token）。
+1. **次高优先级（需人工，自动进程无法完成）**：在 Supabase 控制台为两个 Edge Function（`send-audit-email`、`submission-review`）配置环境变量并重新 Deploy：
    - `RESEND_API_KEY`（取自根目录 `权限.txt`）
    - `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`（同上）
-   - 部署后重跑 T11，应通过。
-2. **可重试**：稍后（邮件限流解除后）重跑 T6.1 注册链路，预期通过（E2E 脚本已改用 `@example.com`）。
+   - 部署后重跑 T11，应通过（进程 #3 复核：当前部署版本仍为旧版，裸 500 无 CORS）。
+2. **可重试**：稍后（邮件限流解除后）重跑 T6.1 注册链路，预期通过（E2E 临时脚本已改用 `@qq.com`，该域名有真实 MX 记录，已确认 GoTrue 校验规则）。
 3. **可选优化**：注册限流时前端直接透传英文错误「email rate limit exceeded」，可考虑在 `site/js/auth.js` 增加中文提示（非阻断，不急）。
-4. 若以上人工项完成后，重跑 `python _tmp/e2e_test.py`，预期 **41/41**。
+4. 若以上人工项完成后，重跑 `python _tmp/e2e_test.py`，预期 **41/41**（当前基线 39/41）。
 
 ## 重要注意事项
 
@@ -92,7 +88,7 @@
 - **不要修改**：`scripts/supabase-setup.mjs` 是数据库 schema 唯一真源；改动后需同时在线上库执行对应 SQL（可用临时 `_*.mjs` 连接串执行，用完即弃）。
 - **线上已改、源码待跟**：若未来重跑 `supabase-setup.mjs` 全量建表，`comments_select` 策略会自动使用修复后的版本，无需手工再改。
 - **更正（进程 #2 核验）**：`.github/workflows/deploy.yml` **只部署 GitHub Pages（gh-pages 分支），不部署 Worker**。Worker `wzsf-site-api` 是手动 `wrangler deploy` 的（部署记录 2026-08-06），与 CI 无关；wrangler 用 `权限.txt` 的 Cloudflare Token 以 `CLOUDFLARE_API_TOKEN` 环境变量执行。
-- **部署链路**：push 到 main 触发 `deploy.yml`（GitHub Pages，含 cname=wzmssf.club）。**当前 GitHub Actions 中断中**，中断期间推送的新提交可能不触发运行、手动 dispatch 可能被基础设施取消——恢复后需重新触发（见「对下一个 AI 的建议」#0）。Edge Function 不在 CI 流水线内，需手动在 Supabase 控制台 Deploy。
+- **部署链路**：push 到 main 触发 `deploy.yml`（GitHub Pages，含 cname=wzmssf.club）。**GitHub 中断已恢复（进程 #3 核验）**；gh-pages 分支由 peaceiris action 直接推送，线上发布由 GitHub 自动「pages build and deployment」完成（发布有延迟属正常，必要时重触发）。Edge Function 不在 CI 流水线内，需手动在 Supabase 控制台 Deploy。
 - **邮件服务**：`RESEND_FROM` 默认 `onboarding@resend.dev`，生产建议改为已验证发件人。
 - **E2E 预置用户**：`_mkuser.mjs`（含数据库密码，仅本地）直插 auth.users/profiles 创建 e2e_user/e2e_admin/pending 用户；E2E 运行前需确保这些账号存在（进程 #2 已验证仍可用）。
 - 本地服务/E2E 依赖端口 8080；若 8080 被占用，E2E 脚本中的 base URL 需同步修改。
@@ -100,6 +96,6 @@
 ## 最后修改时间与标识
 
 - 最后修改时间：2026-08-07
-- 标识：**自动化 AI 进程 #2**（基于进程 #1 更新）
+- 标识：**自动化 AI 进程 #3**（基于进程 #2 更新）
 - 测试基线：`_tmp/e2e_results.json`（39/41，本轮重跑一致）
-- 待办钩子：GitHub Actions 恢复后重新触发部署（dispatch，ref=main）；随后配置 Edge Function 环境变量并重新 Deploy
+- 待办钩子：① 等 pages build 完成并验证线上导航 CSS 修复（若排队卡死则重触发 dispatch）；② 人工在 Supabase 控制台配置 Edge Function 环境变量并重新 Deploy；③ 邮件限流解除后重跑 T6.1（E2E 已改用 `@qq.com`）
