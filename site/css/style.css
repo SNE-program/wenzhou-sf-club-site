@@ -2271,3 +2271,57 @@ html[data-style="retro"][data-theme="light"] .sf-style-select:hover {
   html[data-style="retro"] .sf-style-select { max-width: 7rem; }
   html[data-style="retro"][data-theme="light"] .sf-style-select { max-width: 7rem; }
 }
+
+/* ============================================
+   投稿审核页
+   ============================================ */
+.submit-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.15rem;
+  margin-bottom: 0.85rem;
+}
+.submit-cover {
+  flex: 0 0 4.6rem;
+  height: 4.6rem;
+  border-radius: calc(var(--radius) * 0.6);
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 0 18px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.submit-body { flex: 1; min-width: 0; }
+.submit-head { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+.submit-title { font-size: 1.05rem; }
+.submit-meta { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.4rem 0; }
+.tag-chip {
+  display: inline-block;
+  padding: 0.12rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  background: rgba(232, 177, 76, 0.1);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+.tag-chip.contest { background: rgba(63, 216, 197, 0.12); color: var(--teal); border-color: rgba(63, 216, 197, 0.4); }
+.submit-body-text {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  line-height: 1.65;
+  white-space: normal;
+}
+@media (max-width: 720px) {
+  .submit-item { flex-wrap: wrap; }
+  .submit-cover { flex: 0 0 100%; height: 6.5rem; }
+  .submit-item .c-actions { width: 100%; }
+}

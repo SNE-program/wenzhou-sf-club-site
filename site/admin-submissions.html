@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>投稿审核 · 温州中学科学及幻想文学社</title>
+  <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=6">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>投稿审核</h1>
+      <div class="sub">审核投稿箱中的新稿件。通过后系统会自动发布到作品库并邮件通知投稿人（最多约 5 分钟）；拒绝时建议填写原因。</div>
+    </div>
+    <p><a class="back-link" href="admin.html">← 返回入站审核</a></p>
+
+    <div id="admin-root">
+      <div class="state"><div class="spinner"></div>正在加载……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    const FUNC_URL = `${SB.url}/functions/v1/submission-review`;
+
+    async function callFn(url, opts = {}) {
+      const res = await fetch(url, {
+        ...opts,
+        headers: {
+          apikey: SB.anon,
+          Authorization: "Bearer " + SB.token(),
+          "Content-Type": "application/json",
+          ...(opts.headers || {}),
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `请求失败 ${res.status}`);
+      return data;
+    }
+
+    function timeLabel(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    function preview(text) {
+      const s = String(text || "").replace(/\s+/g, " ").trim();
+      return s.length > 180 ? s.slice(0, 180) + "…" : s;
+    }
+
+    (async function () {
+      const root = document.getElementById("admin-root");
+      const user = SB.user();
+      if (!user) {
+        root.innerHTML = `<div class="state"><p>请先登录管理员账号</p><p style="margin-top:1rem"><button class="btn" id="go-login" type="button">登录</button></p></div>`;
+        document.getElementById("go-login").addEventListener("click", () => window.openAuthModal("login"));
+        return;
+      }
+      const me = await window.getMyProfile();
+      if (!me || !me.is_admin) {
+        root.innerHTML = `<div class="state">你没有管理权限。</div>`;
+        return;
+      }
+
+      let rows = [];
+      try {
+        rows = await callFn(FUNC_URL);
+      } catch (e) {
+        root.innerHTML = `<div class="state">加载失败：${esc(e.message)}</div>`;
+        return;
+      }
+
+      function renderList() {
+        root.innerHTML = `
+          <div class="audit-count">待审核 <b>${rows.length}</b> 篇</div>
+          ${rows.length
+            ? rows.map((s) => `
+              <div class="audit-item submit-item" data-id="${esc(s.id)}">
+                <div class="submit-cover" style="${s.cover ? `background-image:url('${esc(s.cover)}')` : "background:linear-gradient(135deg,#1c1030,#3a2a6e)"}">${s.cover ? "" : esc(String(s.title || "?").charAt(0))}</div>
+                <div class="submit-body">
+                  <div class="submit-head">
+                    <b class="submit-title">${esc(s.title || "（无标题）")}</b>
+                    <span class="c-time">${esc(s.author || "匿名")} · ${esc(timeLabel(s.created))}</span>
+                  </div>
+                  <div class="submit-meta">
+                    ${(s.types || []).map((t) => `<span class="tag-chip">${esc(t)}</span>`).join("")}
+                    ${(s.contests || []).map((t) => `<span class="tag-chip contest">🏆 ${esc(t)}</span>`).join("")}
+                    ${s.email ? `<span class="c-time">✉ ${esc(s.email)}</span>` : ""}
+                  </div>
+                  <div class="submit-body-text">${esc(preview(s.body))}</div>
+                </div>
+                <div class="c-actions">
+                  <button class="btn audit-pass" type="button">通过</button>
+                  <button class="c-btn audit-reject" type="button">拒绝</button>
+                </div>
+              </div>`).join("")
+            : `<div class="state">当前没有待审核的投稿。投稿人会通过网站的「投稿箱」提交，提交后自动出现在这里。</div>`}`;
+        root.querySelectorAll(".submit-item").forEach((item) => {
+          const id = item.dataset.id;
+          item.querySelector(".audit-pass").addEventListener("click", () => review(id, "approve"));
+          item.querySelector(".audit-reject").addEventListener("click", () => review(id, "reject"));
+        });
+      }
+
+      async function review(id, action) {
+        const s = rows.find((r) => r.id === id);
+        if (!s) return;
+        let reason = "";
+        if (action === "reject") {
+          reason = (prompt(`拒绝投稿《${s.title || ""}》。\n可填写原因（将随邮件通知投稿人）：`, "") || "").trim();
+        } else {
+          if (!confirm(`确认通过《${s.title || ""}》吗？\n系统将自动发布到作品库并邮件通知投稿人。`)) return;
+        }
+        const btns = document.querySelectorAll(`.submit-item[data-id="${id}"] button`);
+        btns.forEach((b) => (b.disabled = true));
+        try {
+          await callFn(FUNC_URL, {
+            method: "POST",
+            body: JSON.stringify({ action, id, reason }),
+          });
+          rows = rows.filter((r) => r.id !== id);
+          if (!rows.length) {
+            root.innerHTML = `<div class="state">已处理完毕，当前没有待审核投稿。</div>`;
+          } else {
+            renderList();
+          }
+        } catch (e) {
+          alert("操作失败：" + e.message);
+          btns.forEach((b) => (b.disabled = false));
+        }
+      }
+
+      renderList();
+    })();
+  </script>
+</body>
+</html>

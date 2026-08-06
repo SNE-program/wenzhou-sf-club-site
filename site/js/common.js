@@ -2,6 +2,9 @@
 // 公共导航 / 页脚注入 + 当前页高亮 + 主题切换 + 站内搜索入口
 // ============================================
 (function () {
+  // 站点 API（Cloudflare Worker）地址，供 api.js 读取
+  window.SITE_API = window.SITE_API || "https://wzsf-site-api.wenzhou-sf.workers.dev";
+
   const NAV_ITEMS = [
     { href: "index.html", label: "首页" },
     { href: "activities.html", label: "活动" },
