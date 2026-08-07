@@ -6,8 +6,10 @@
 //   GET /api/works       作品列表
 //   GET /api/contests    竞赛列表
 //   GET /api/members     成员列表
-//   定时任务（每 5 分钟，投稿闭环兜底）：
+//   定时任务（每 5 分钟，投稿闭环兜底 + 内容同步触发）：
 //     已通过→自动转录发布+上架邮件；已拒绝→发送拒绝邮件
+//     对比 Notion 与仓库 main 数据指纹，有变化则 repository_dispatch
+//     触发 sync-notion 工作流重建静态数据（GitHub 定时任务不可靠，见下）
 //   投稿审核操作由 Supabase Edge Function「submission-review」处理
 //   （supabase.co 在国内可访问；workers.dev 不可达）
 // 绑定（部署时注入，作为全局变量）：
@@ -15,6 +17,7 @@
 //   DB_SITE / DB_ACTIVITIES / DB_WORKS / DB_CONTESTS / DB_MEMBERS / DB_SUBMISSIONS
 //   SITE_BASE      站内链接前缀（默认 github.io 地址）
 //   RESEND_API_KEY（secret）/ RESEND_FROM  投稿结果邮件
+//   GH_REPO（var）/ GH_TOKEN（secret） 内容同步触发 GitHub 工作流
 // 使用传统格式（addEventListener），兼容所有部署方式。
 // ============================================
 
@@ -420,6 +423,113 @@ async function handleScheduled() {
     }
   } catch (e) {
     console.error("[submit] 定时任务失败", e.message);
+  }
+  // 内容同步检查（内部自带 try/catch，失败不影响投稿兜底）
+  await maybeTriggerSync();
+}
+
+// ============================================
+// Notion → GitHub Pages 近实时内容同步
+// GitHub Actions 的 schedule 不可靠（best-effort，且仓库闲置 60 天停摆），
+// 因此由本 Worker 每 5 分钟对比 Notion 与仓库 main 分支的数据指纹，
+// 内容变化时通过 repository_dispatch 触发 sync-notion 工作流重建静态数据
+// 并提交回 main（push 自动触发 GitHub Pages 部署）。需配置密钥 GH_TOKEN。
+// ============================================
+const GH_REPO = typeof GH_REPO !== "undefined" ? GH_REPO : "SNE-program/wenzhou-sf-club-site";
+const SYNC_FILES = {
+  site: "site.json",
+  activities: "activities.json",
+  works: "works.json",
+  contests: "contests.json",
+  members: "members.json",
+};
+
+/** 封面稳定标识：Notion 临时文件取 S3 路径（签名参数会轮换，忽略）；外链原样保留 */
+function coverKeyOf(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (/prod-files|amazonaws/i.test(u.hostname)) return u.pathname.replace(/^\//, "");
+    return url;
+  } catch {
+    return url;
+  }
+}
+
+/** 单条指纹：剔除会轮换/本地化的 cover 字段，保留稳定的 coverKey */
+function itemFingerprint(item) {
+  const { cover, ...rest } = item || {};
+  return { ...rest, coverKey: item && item.coverKey !== undefined ? item.coverKey : coverKeyOf(cover) };
+}
+
+/** 区块指纹：数组按稳定键排序，消除 Notion 返回顺序波动 */
+function sectionFingerprint(sections) {
+  const out = {};
+  for (const [k, v] of Object.entries(sections)) {
+    out[k] = Array.isArray(v)
+      ? v
+          .map(itemFingerprint)
+          .sort((a, b) =>
+            String(a.id ?? a.name ?? JSON.stringify(a)).localeCompare(
+              String(b.id ?? b.name ?? JSON.stringify(b))
+            )
+          )
+      : itemFingerprint(v);
+  }
+  return JSON.stringify(out);
+}
+
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** 触发 sync-notion 工作流重建静态数据 */
+async function dispatchSync(reason) {
+  if (typeof GH_TOKEN === "undefined" || !GH_TOKEN) {
+    console.log("[sync] 未配置 GH_TOKEN 密钥，跳过自动触发（依赖 GitHub 定时任务兜底）");
+    return;
+  }
+  const res = await fetch(`https://api.github.com/repos/${GH_REPO}/dispatches`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${GH_TOKEN}`,
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ event_type: "sync-notion", client_payload: { reason } }),
+  });
+  if (!res.ok) {
+    console.error(`[sync] 触发 GitHub 工作流失败 ${res.status}: ${(await res.text().catch(() => ""))}`);
+  } else {
+    console.log("[sync] 已触发 GitHub 数据重建（repository_dispatch:", reason + "）");
+  }
+}
+
+/** 对比 Notion 与仓库 main 分支数据，发生变化时触发重建 */
+async function maybeTriggerSync() {
+  try {
+    const fresh = {};
+    for (const route of Object.keys(SYNC_FILES)) fresh[route] = await loadSection(route);
+    const freshHash = await sha256Hex(sectionFingerprint(fresh));
+
+    const repo = {};
+    for (const [route, file] of Object.entries(SYNC_FILES)) {
+      const res = await fetch(`https://raw.githubusercontent.com/${GH_REPO}/main/site/data/${file}`, {
+        headers: { "User-Agent": "wzsf-site-sync" },
+      });
+      if (res.ok) repo[route] = await res.json();
+      else if (res.status !== 404) throw new Error(`仓库数据 ${file} 读取失败 ${res.status}`);
+    }
+    const repoHash = await sha256Hex(sectionFingerprint(repo));
+
+    if (freshHash !== repoHash) {
+      await dispatchSync("notion-content-changed");
+    } else {
+      console.log("[sync] Notion 与仓库数据一致，无需重建");
+    }
+  } catch (e) {
+    console.error("[sync] 同步检查失败（下轮重试）", e.message);
   }
 }
 

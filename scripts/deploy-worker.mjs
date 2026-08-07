@@ -1,17 +1,18 @@
 // ============================================
 // 部署 Cloudflare Worker（无需安装 wrangler）
 // 用法：
-//   node scripts/deploy-worker.mjs <CF_TOKEN> <ACCOUNT_ID> <NOTION_TOKEN>
-// 作用：上传 worker/src/index.js、配置 4 个数据库 id 变量、
-//      注入 NOTION_TOKEN 密钥、输出 Worker 访问地址
+//   node scripts/deploy-worker.mjs <CF_TOKEN> <ACCOUNT_ID> <NOTION_TOKEN> [GH_TOKEN]
+// 作用：上传 worker/src/index.js、配置数据库 id 等变量、
+//      注入 NOTION_TOKEN（及可选 GH_TOKEN，内容同步用）密钥、
+//      输出 Worker 访问地址
 // ============================================
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const [cfToken, accountId, notionToken] = process.argv.slice(2);
+const [cfToken, accountId, notionToken, ghToken] = process.argv.slice(2);
 if (!cfToken || !accountId || !notionToken) {
-  console.error("用法: node scripts/deploy-worker.mjs <CF_TOKEN> <ACCOUNT_ID> <NOTION_TOKEN>");
+  console.error("用法: node scripts/deploy-worker.mjs <CF_TOKEN> <ACCOUNT_ID> <NOTION_TOKEN> [GH_TOKEN]");
   process.exit(1);
 }
 
@@ -24,6 +25,9 @@ const vars = {
   DB_ACTIVITIES: "3b339fd6-4004-8157-9ea2-c126459645f4",
   DB_WORKS: "3b339fd6-4004-8111-aac9-cf77c0c99eab",
   DB_MEMBERS: "3b339fd6-4004-81a1-a3a5-f3933823fcd6",
+  DB_CONTESTS: "3b439fd6-4004-8100-8d7e-e7e049dd49b5",
+  DB_SUBMISSIONS: "3b439fd6-4004-8093-b745-c8ee4f27c1a0",
+  GH_REPO: "SNE-program/wenzhou-sf-club-site",
 };
 
 const bindings = Object.entries(vars).map(([name, text]) => ({ type: "plain_text", name, text }));
@@ -64,6 +68,20 @@ const sec = await fetch(
 );
 const secJson = await sec.json();
 console.log("② 配置密钥:", sec.status, secJson.success ? "成功" : JSON.stringify(secJson.errors));
+
+// 2.5 注入 GH_TOKEN 密钥（内容同步用，可选）
+if (ghToken) {
+  const sec2 = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${scriptName}/secrets`,
+    {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${cfToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "GH_TOKEN", text: ghToken }),
+    }
+  );
+  const sec2Json = await sec2.json();
+  console.log("②.5 配置 GH_TOKEN 密钥:", sec2.status, sec2Json.success ? "成功" : JSON.stringify(sec2Json.errors));
+}
 
 // 3. 获取 workers.dev 子域
 const sub = await fetch(

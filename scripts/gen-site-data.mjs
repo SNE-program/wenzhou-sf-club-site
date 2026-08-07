@@ -170,12 +170,27 @@ const sections = {
   "members.json": loadMembers,
 };
 
+/** 封面稳定标识：Notion 临时文件取 S3 路径（签名参数会轮换，忽略）；外链原样保留。
+ *  Worker 同步指纹与 gen-site-data 共用同一规则，保证两侧可比。 */
+function coverStableKey(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (/prod-files|amazonaws/i.test(u.hostname)) return u.pathname.replace(/^\//, "");
+    return url;
+  } catch {
+    return url;
+  }
+}
+
 /** 把 Notion 临时封面链接下载缓存到本地（永久有效，不再过期裂图） */
 async function persistCovers(items) {
   const COVER_DIR = path.join(SITE_DIR, "images", "covers");
   await mkdir(COVER_DIR, { recursive: true });
   for (const it of items) {
     if (!it.cover) continue;
+    // 记录封面稳定标识（供 Worker 同步指纹对比；Notion 签名链接本身会轮换）
+    it.coverKey = coverStableKey(it.cover);
     // 仅处理 Notion 临时文件（S3 签名 URL），外链图片原样保留
     if (!/prod-files|amazonaws|X-Amz-|x-amz-/i.test(it.cover)) continue;
     try {

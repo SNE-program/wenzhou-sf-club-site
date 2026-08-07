@@ -1,13 +1,12 @@
 [
   {
-    "id": "3b439fd6-4004-8013-862d-ff6427955088",
-    "title": "测试文本",
+    "id": "3b539fd6-4004-8118-9022-dfec01d54517",
+    "title": "《文明四季年历》",
     "author": "SNElampnight",
-    "category": "短篇小说",
-    "tags": [
-      "科普"
-    ],
-    "summary": "测试文本",
-    "cover": "images/covers/3b439fd6-4004-8013-862d-ff6427955088.jpeg"
+    "category": "其他",
+    "tags": [],
+    "summary": "见附件",
+    "body": "",
+    "cover": null
   }
 ]

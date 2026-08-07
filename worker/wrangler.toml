@@ -13,6 +13,7 @@ DB_CONTESTS = "3b439fd6-4004-8100-8d7e-e7e049dd49b5"
 DB_SUBMISSIONS = "3b439fd6-4004-8093-b745-c8ee4f27c1a0"
 SITE_BASE = "https://sne-program.github.io/wenzhou-sf-club-site"
 RESEND_FROM = "onboarding@resend.dev"
+GH_REPO = "SNE-program/wenzhou-sf-club-site"
 
 # 投稿结果邮件定时任务（每 5 分钟）
 [triggers]
