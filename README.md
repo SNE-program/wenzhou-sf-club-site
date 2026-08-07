@@ -22,11 +22,12 @@
 └── .github/workflows/     # GitHub Actions 自动部署
 ```
 
-## 当前状态（2026-08-06）
+## 当前状态（2026-08-07）
 
 - 线上地址：**https://sne-program.github.io/wenzhou-sf-club-site/**（GitHub Pages，推送 main 即自动更新）
 - Notion 数据中转 Worker 已部署：`wzsf-site-api`（Cloudflare），数据读取链路已本地验证通过
-- 说明：`*.workers.dev` 域名在国内部分网络不可达，因此前端暂未指向 Worker，网站显示本地占位数据；当网络可达时会自动读取 Notion 实时内容
+- **内容同步（近实时）**：Worker 每 5 分钟对比 Notion 与仓库 main 分支的数据指纹，内容变化时通过 `repository_dispatch` 触发 `sync-notion` 工作流重建静态数据并提交回 main，push 自动触发 GitHub Pages 部署（不再依赖不可靠的 GitHub 定时任务）
+- 说明：`*.workers.dev` 域名在国内部分网络不可达，因此前端暂未指向 Worker，网站显示本地静态数据；静态数据由上述同步机制保持与 Notion 一致
 - **升级路径**：购买域名（约 ¥50~80/年）绑定到 Cloudflare 后，把 Worker 地址填到 `site/js/api.js` 的 `API_BASE` 即可切换到 Notion 实时数据
 
 ## 已实现功能
@@ -46,7 +47,9 @@
 
 1. 打开 Notion 中的 4 张表：`活动`、`作品`、`成员`、`站点信息`（位于"社团主页"页面下）
 2. 增删改条目（支持文字、图片、链接）
-3. 保存即生效（网站有缓存，最长约 60 秒后可见）
+3. 保存后约 **5~10 分钟**内自动同步到网站（Worker 检测到变化 → 触发重建 → GitHub Pages 部署；GitHub Pages CDN 缓存最长约 10 分钟）
+
+> 说明：内容同步由 Cloudflare Worker 触发，不依赖 GitHub 定时任务（后者是 best-effort 且仓库闲置 60 天会停摆）。若 Worker 未部署或未配置 `GH_TOKEN` 密钥，则退回 GitHub 定时任务兜底（`.github/workflows/deploy.yml` 的 schedule）。
 
 ## 部署清单（已完成 ✅）
 

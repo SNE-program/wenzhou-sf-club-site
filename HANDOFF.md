@@ -5,7 +5,20 @@
 
 ## 当前状态
 
-✅ **40/41 E2E 通过（进程 #14 复验）**：唯一失败为 T6.1 Supabase 邮件限流（环境项，历史波动数小时级）。**进程 #14 新增 2 项低风险优化（O13 站点 favicon、O14 表态/评论等操作错误提示中文化），已提交推送 `8b2b217`，针对性验证 9/9 + 全量回归 40/41 无回归。** 工作区干净，main 已同步 origin。
+✅ **进程 #15 修复内容同步 Bug（网站与 Notion 长期不一致）**：根因是 GitHub Actions 的 `schedule` 不可靠（实测近 48 次运行仅 7 次 schedule，间隔 1.5~6 小时；且仓库闲置 60 天会停摆）。已改为 **Cloudflare Worker 每 5 分钟对比 Notion 与仓库 main 分支数据指纹，内容变化时 `repository_dispatch` 触发新增的 `sync-notion.yml` 重建静态数据并提交回 main**（push 自然触发 Pages 部署）。同时本地重新生成数据，把 Notion 当前最新内容（新增《文明四季年历》作品页、站点简介与竞赛更新）同步进 main/线上。提交 `3df8f04` 已推送（`65c6e18..3df8f04`，140.82.114.4 可达）。Worker 已 `wrangler deploy`（含 GH_REPO 变量 + GH_TOKEN 密钥）。
+
+## 已完成的工作
+
+### 本轮（自动化 AI 进程 #15）工作
+| 项 | 内容 | 结果 |
+|---|---|---|
+| 初始检查 | 读取 `权限.txt`、HANDOFF、README、worker/src/index.js、deploy.yml；nslookup 确认 wzmssf.club CNAME→github.io、无 api 子域 | ✅ |
+| 根因定位 | GitHub Actions API 实证：48 次运行仅 7 次 schedule（间隔 1.5~6h，非 30min）；且 60 天闲置停摆规则 → 定时同步不可靠是"长期不一致"根因；另实测当前 main/线上已落后 Notion（Notion 新增《文明四季年历》、站点简介更新，仓库仍为旧测试数据） | ✅ |
+| **O15 内容近实时同步** | ① 新增 `.github/workflows/sync-notion.yml`（repository_dispatch[sync-notion] + workflow_dispatch，重建 data/articles 后提交回 main，push 自动部署）；② Worker `handleScheduled` 增加 `maybeTriggerSync()`：SHA-256 指纹对比 Notion（loadSection）与 raw.githubusercontent main 数据，变化时 dispatch（需 GH_TOKEN 密钥，未配置时静默降级回 GitHub 定时任务）；③ `gen-site-data.mjs` 输出 `coverKey`（封面稳定标识=S3 路径），指纹剔除会轮换的 Notion 签名 URL，避免误触发/漏触发；④ 数组按稳定键排序消除 Notion 返回顺序波动；⑤ `deploy-worker.mjs` 补齐缺失的 DB_CONTESTS/DB_SUBMISSIONS 变量并支持 GH_TOKEN | ✅ 已提交推送 |
+| 指纹验证 | `_tmp/verify_sync_fingerprint.mjs`（复制 Worker 同步逻辑）：Notion fresh 与本地重生成 repo 数据指纹一致（不误触发）✅；模拟修改标题后指纹变化（可触发）✅ | ✅ 不入库 |
+| 生成确定性 | 本地连跑两次 `gen-site-data.mjs` + `gen-article-pages.mjs`：第二次无任何新增 diff（幂等，commit-back 不会空转） | ✅ |
+| Worker 部署 | `wrangler deploy` 成功（Version a1a6cc99），cron `*/5 * * * *`，GH_REPO 变量生效；`wrangler secret put GH_TOKEN`（权限.txt 的 Github 令牌） | ✅ |
+| 线上核验 | deploy #49（push 3df8f04）success；gh-pages 分支 works.json 已含《文明四季年历》、articles 含新页；live site.json/contests.json 已更新，works.json 由 CDN 边缘缓存稍后刷新（max-age≈10min） | ✅ |
 
 - ✅ **进程 #14 优化落地 2 项**：新增 `site/favicon.svg`（幻字品牌图标）并在全部 14 个页面 + 6 个生成的静态文章页 + 生成脚本模板挂载 favicon 链接，消除每页 /favicon.ico 404 请求与浏览器默认图标（O13）；`article.js` 表态加载/表态/评论加载/发布/编辑/删除/举报共 7 处失败分支统一中文化（O14，与 O1 认证错误中文化一致的显示层改进，auditMsg 优先级不变）。
 - 🛠 **网络（进程 #14 新方法）**：hosts 的 github.com 仍映射 140.82.112.3（改 hosts 需管理员权限，本次未能修改）。push 首次报 `Connection reset`、重试报超时后，改用 **`git -c http.curloptResolve='github.com:443:140.82.112.4' push origin main`** 固定连接可达 IP **一次成功**（`8a28611..8b2b217`），无需改 hosts。推荐沿用此方法。
