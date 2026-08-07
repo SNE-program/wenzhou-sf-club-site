@@ -140,7 +140,7 @@
         document.querySelector("#activities").innerHTML = acts.length
           ? acts.map((it) => `
             <a class="card" href="articles/${encodeURIComponent(it.id)}.html">
-              <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
+              <div class="card-cover" style="${coverStyle(it, it.title)}"><span class="cover-title">${esc(coverText(it.title))}</span></div>
               <div class="card-body">
                 <h3>${esc(it.title)}</h3>
                 <p>${esc(it.summary)}</p>
@@ -163,7 +163,7 @@
         document.querySelector("#works").innerHTML = works.length
           ? works.map((it) => `
             <a class="card" href="articles/${encodeURIComponent(it.id)}.html">
-              <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
+              <div class="card-cover" style="${coverStyle(it, it.title)}"><span class="cover-title">${esc(coverText(it.title))}</span></div>
               <div class="card-body">
                 <h3>${esc(it.title)}</h3>
                 <p>${esc(it.summary)}</p>

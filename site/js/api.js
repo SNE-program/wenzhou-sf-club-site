@@ -67,6 +67,13 @@ function initialOf(str) {
   return (str || "?").trim().charAt(0);
 }
 
+/** 自动封面文字：去掉首尾书名号《》，展示完整标题（避免封面全是"《"） */
+function coverText(title) {
+  const t = String(title == null ? "" : title).trim();
+  if (!t) return "?";
+  return t.replace(/^《(.*)》$/, "$1").replace(/^《/, "").replace(/》$/, "");
+}
+
 function dateLabel(dateStr) {
   if (!dateStr) return "";
   const d = new Date(dateStr);

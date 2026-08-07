@@ -96,7 +96,7 @@
     }
 
     box.innerHTML = `
-      <div class="card-cover detail-cover" style="${coverStyle(article, article.title)}">${initialOf(article.title)}</div>
+      <div class="card-cover detail-cover" style="${coverStyle(article, article.title)}"><span class="cover-title">${esc(coverText(article.title))}</span></div>
       <h1 class="detail-title">${esc(article.title)}</h1>
       <div class="detail-meta">${metaBits.join(" · ")}</div>
       <div class="detail-body">${bodyHTML(article)}</div>
