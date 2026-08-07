@@ -120,6 +120,31 @@
     hint("vote-hint", "");
   }
 
+  // 乐观更新本地计数：旧值扣减、新值累加（保留"刷新页面校正"语义，后台再校正）
+  function adjustVoteCountsLocal(oldVal, newVal) {
+    const upEl = document.getElementById("cnt-up");
+    const downEl = document.getElementById("cnt-down");
+    let up = parseInt(upEl.textContent, 10) || 0;
+    let down = parseInt(downEl.textContent, 10) || 0;
+    if (oldVal === 1) up = Math.max(0, up - 1);
+    else if (oldVal === -1) down = Math.max(0, down - 1);
+    if (newVal === 1) up += 1;
+    else if (newVal === -1) down += 1;
+    upEl.textContent = up;
+    downEl.textContent = down;
+  }
+
+  // 从服务端重新拉取表态计数（setVote 成功后后台校正，不阻塞点击反馈）
+  async function refreshVoteCounts() {
+    try {
+      const all = await SB.get("votes", `article_id=eq.${encodeURIComponent(ARTICLE_ID)}&select=value`);
+      let up = 0, down = 0;
+      all.forEach((x) => { if (x.value === 1) up++; else if (x.value === -1) down++; });
+      document.getElementById("cnt-up").textContent = up;
+      document.getElementById("cnt-down").textContent = down;
+    } catch (e) { /* 后台校正失败时保留本地乐观值 */ }
+  }
+
   async function setVote(v) {
     const user = SB.user();
     if (!user) {
@@ -134,22 +159,20 @@
     const q = `article_id=eq.${encodeURIComponent(ARTICLE_ID)}&user_id=eq.${user.id}`;
     try {
       const rows = await SB.get("votes", q + "&select=value");
+      const oldVal = rows.length ? rows[0].value : null;
+      let next;
       if (rows.length) {
-        const next = rows[0].value === v ? 0 : v;
+        next = rows[0].value === v ? 0 : v;
         await SB.update("votes", { value: next, updated_at: new Date().toISOString() }, q);
-        myVote = next;
       } else {
         await SB.insert("votes", { article_id: ARTICLE_ID, user_id: user.id, value: v });
-        myVote = v;
+        next = v;
       }
+      myVote = next;
       renderVoteButtons();
-      // 刷新计数
-      const all = await SB.get("votes", `article_id=eq.${encodeURIComponent(ARTICLE_ID)}&select=value`);
-      let up = 0, down = 0;
-      all.forEach((x) => { if (x.value === 1) up++; else if (x.value === -1) down++; });
-      document.getElementById("cnt-up").textContent = up;
-      document.getElementById("cnt-down").textContent = down;
+      adjustVoteCountsLocal(oldVal, next);
       hint("vote-hint", "已记录你的表态", true);
+      refreshVoteCounts(); // 后台校正，不阻塞
     } catch (e) {
       hint("vote-hint", auditMsg(e.message) || "操作失败：" + e.message);
     }
@@ -158,6 +181,9 @@
   // ---------- 评论 ----------
   async function loadComments() {
     const list = document.getElementById("c-list");
+    if (list && !list.children.length) {
+      list.innerHTML = `<p class="empty">评论加载中…</p>`;
+    }
     try {
       const rows = await SB.get(
         "comments",
