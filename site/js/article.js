@@ -46,6 +46,15 @@
     return TYPE === "activities" ? "activities.html" : "works.html";
   }
 
+  // 正文渲染：正文优先（多段落），无正文时回退到简介
+  function bodyHTML(article) {
+    const text = (article.body || article.summary || "").trim();
+    const paras = text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+    return paras.length
+      ? paras.map((p) => `<p>${esc(p)}</p>`).join("")
+      : `<p>${esc(article.summary || "暂无内容")}</p>`;
+  }
+
   // ---------- 文章渲染 ----------
   function renderArticle() {
     const box = document.getElementById("detail");
@@ -66,7 +75,7 @@
       <div class="card-cover detail-cover" style="${coverStyle(article, article.title)}">${initialOf(article.title)}</div>
       <h1 class="detail-title">${esc(article.title)}</h1>
       <div class="detail-meta">${metaBits.join(" · ")}</div>
-      <div class="detail-body"><p>${esc(article.summary)}</p></div>`;
+      <div class="detail-body">${bodyHTML(article)}</div>`;
 
     const back = document.getElementById("back-link");
     back.href = backTarget();
@@ -230,6 +239,7 @@
   async function submitComment() {
     const user = SB.user();
     const input = document.getElementById("c-input");
+    const submit = document.getElementById("c-submit");
     const text = input.value.trim();
     if (!user) { window.openAuthModal("login"); return; }
     if (myProfile && myProfile.status !== "approved") {
@@ -237,6 +247,9 @@
       return;
     }
     if (!text) { hint("c-hint", "请输入评论内容"); return; }
+    if (submit.disabled) return; // 提交中，防重复点击
+    submit.disabled = true;
+    submit.textContent = "发布中…";
     try {
       await SB.insert("comments", { article_id: ARTICLE_ID, user_id: user.id, content: text });
       input.value = "";
@@ -250,6 +263,9 @@
       } else {
         hint("c-hint", "发布失败：" + e.message);
       }
+    } finally {
+      submit.disabled = false;
+      submit.textContent = "发表评论";
     }
   }
 

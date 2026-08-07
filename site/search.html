@@ -69,7 +69,7 @@
 
     function searchable(item) {
       return [
-        item.title, item.summary, item.author, item.category, item.location, item.date,
+        item.title, item.summary, item.body, item.author, item.category, item.location, item.date,
         ...(item.tags || []),
       ].filter(Boolean).join(" ").toLowerCase();
     }

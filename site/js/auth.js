@@ -7,6 +7,22 @@
   let modalEl = null;
   const PROFILE_KEY = "sb_profile";
 
+  // GoTrue / Supabase 常见英文错误 → 中文友好提示（仅显示层翻译，不改业务逻辑）
+  function friendlyAuthError(msg) {
+    const m = String(msg || "");
+    const map = [
+      [/rate limit/i, "操作过于频繁，请稍后再试（邮件服务限流）"],
+      [/user already registered/i, "该邮箱已注册，请直接登录"],
+      [/invalid login credentials/i, "邮箱或密码错误"],
+      [/unable to validate email/i, "邮箱地址无效，请检查后重试"],
+      [/password should be at least/i, "密码长度至少 6 位"],
+      [/too many requests/i, "请求过于频繁，请稍后再试"],
+      [/network|fetch failed|failed to fetch/i, "网络异常，请检查网络后重试"],
+    ];
+    for (const [re, text] of map) if (re.test(m)) return text;
+    return null;
+  }
+
   // 读取当前用户资料（status / is_admin / nickname），带本地缓存
   async function loadProfile() {
     const user = SB.user();
@@ -162,7 +178,7 @@
         rOk.textContent = "重置链接已发送至你的邮箱，请查收并按邮件提示设置新密码。";
         rOk.hidden = false;
       } catch (err) {
-        rErr.textContent = String(err.message || "发送失败，请重试");
+        rErr.textContent = friendlyAuthError(err.message) || String(err.message || "发送失败，请重试");
         rErr.hidden = false;
       } finally {
         send.disabled = false;
@@ -215,7 +231,7 @@
         if (/not confirmed|unconfirmed|email_not_confirmed|未验证/i.test(msg)) {
           errEl.textContent = "该邮箱尚未完成验证，请先到邮箱点击验证链接，再重新登录。";
         } else {
-          errEl.textContent = msg || "操作失败，请重试";
+          errEl.textContent = friendlyAuthError(msg) || msg || "操作失败，请重试";
         }
         errEl.className = "form-err";
         errEl.hidden = false;

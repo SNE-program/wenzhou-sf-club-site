@@ -72,6 +72,7 @@ function mapActivity(row) {
     date: propText(p["日期"]),
     location: propText(p["地点"]),
     summary: propText(p["简介"]),
+    body: propText(p["正文"]),
     tags: p["标签"] && p["标签"].type === "multi_select" ? p["标签"].multi_select.map((s) => s.name) : [],
     cover: propCover(p["封面"]),
   };
@@ -86,6 +87,7 @@ function mapWork(row) {
     category: propText(p["分类"]),
     tags: p["标签"] && p["标签"].type === "multi_select" ? p["标签"].multi_select.map((s) => s.name) : [],
     summary: propText(p["简介"]),
+    body: propText(p["正文"]),
     cover: propCover(p["封面"]),
   };
 }
