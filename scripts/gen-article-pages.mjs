@@ -165,7 +165,7 @@ ${meta("twitter:card", "summary_large_image")}
     })();
   </script>
   <base href="../">
-  <link rel="stylesheet" href="css/style.css?v=10">
+  <link rel="stylesheet" href="css/style.css?v=11">
 </head>
 <body>
   <div data-nav></div>
@@ -203,11 +203,11 @@ ${meta("twitter:card", "summary_large_image")}
   <div data-footer></div>
 
   <script>window.ARTICLE_CTX = { id: ${JSON.stringify(id)}, type: ${JSON.stringify(type)} };</script>
-  <script src="js/common.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/supabase.js"></script>
+  <script src="js/common.js?v=5"></script>
+  <script src="js/api.js?v=5"></script>
+  <script src="js/supabase.js?v=5"></script>
   <script src="js/auth.js"></script>
-  <script src="js/article.js"></script>
+  <script src="js/article.js?v=5"></script>
 </body>
 </html>
 `;
