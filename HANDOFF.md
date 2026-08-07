@@ -5,12 +5,17 @@
 
 ## 当前状态
 
-⚠️ **E2E 39/41（进程 #6 重跑，`_tmp/e2e_run_p6b.log`）：T6.1 因 Supabase 邮件限流复发（环境级 429）失败，链路本身已验证正常；T11（Edge Function 部署）仍为唯一「需人工」项。线上部署核验通过：Pages `status=built`，live 全站与仓库 34/35 一致（唯一差异为部署期重生成文章页的 `js/auth.js` 无 `?v=2`，属生成器预期行为、非缺陷）。**
+✅ **T11 已人工解决（进程 #7 核验）**：用户已在 Supabase 控制台为两个 Edge Function 配置环境变量并重新部署。实测：`send-audit-email` → `200 {"ok":true}`、`submission-review` → `200` 返回真实待审核列表，均带 CORS `*`。E2E 剩 T6.1 邮件限流（环境项，历史波动数小时级）。
 
-- **T6.1 邮件限流复发（环境，可重试）**：进程 #4/#5 期间限流解除、T6.1 连续两轮 PASS；进程 #6 重跑时再次 429 `email rate limit exceeded`（定向重试 3/3 均限流，`_tmp/retry_signup_p6.log`）。**链路本身健康**：本轮 p6 首次运行时服务端成功创建 `signup_*@qq.com` 未确认用户（GoTrue admin API 证实 `confirmed_at=NULL`，即走验证邮件路径），且进程 #4/#5 各完整 PASS 过一次。
-- **测试脚本改进（进程 #6）**：`_tmp/e2e_test.py` 的 T6.1 由固定 1.5s 等待改为 ≤10s 轮询 `#f-err`。起因：p6 首次运行中注册请求实际成功（用户已建），但 1.5s 内成功提示未渲染 → 误报 FAIL（空 detail，非限流）。改为轮询后（p6b）能正确捕获 429 限流文案。该文件在 `_tmp/`（仓库外，不入库）。
-- **✅ 线上核验（进程 #6）**：`GET /pages` → `status=built`（source=gh-pages，cname=wzmssf.club）。全文件核验用 `git diff --no-index`（git 会自动忽略 CRLF 伪差）：**34/35 与仓库 `site/` 完全一致**；唯一真实差异为部署期重生成的分享文章页 `3b439fd6-4004-8013-862d-ff6427955088.html`（`js/auth.js?v=2` → `js/auth.js`，与进程 #5 判定一致，非缺陷）。⚠️ 若用裸 SHA1 比对会误报 22/35 差异——那是 Windows 工作区 CRLF 与线上 LF 的伪差，务必用换行符归一化后的比对（或直接 `git diff --no-index`）。
-- **T11 复核（进程 #6，新证据）**：有效管理员 JWT 直调 `send-audit-email` → **HTTP 500 且无 CORS 头**，与进程 #5 证据一致 → 已部署函数仍为旧版（仓库内 envCheck 修复未上线），**需人工**在 Supabase 控制台配置环境变量并重新 Deploy 后生效。无有效 JWT 时平台网关会先返回 401+CORS=*，勿误判为已修复。
+✅ **新增修复（进程 #7）：JWT 过期自动续期**。真实用户登录超 1 小时后表态/评论报「操作失败：JWT expired」——根因是自制客户端 `site/js/supabase.js` 只存 `access_token`、丢弃 `refresh_token`，无续期逻辑。已修复：
+- 登录/刷新时同时保存 `refresh_token`（GoTrue 新版为 12 位单次使用 opaque token，属正常格式）
+- 新增 `SB.refresh()`：用 refresh_token 换新 access_token
+- `SB.request()` 遇任意 401 自动续期并重试一次，失败报「登录已过期，请重新登录」并清会话
+- `auth.js` 监听 `sb-auth-changed` 事件，续期失败登出时界面自动切回未登录
+- 验证：浏览器内将 token 篡改为无效 JWT 后表态 → 自动续期成功（"已记录你的表态"）；E2E 重跑 T9 全 PASS，无回归
+
+- **T6.1 邮件限流复发（环境，可重试）**：进程 #7 两轮 E2E 均 `email rate limit exceeded`（`_tmp/e2e_run_p7.log` / `_tmp/e2e_run_p7b.log`）。链路本身健康（进程 #4/#5 完整 PASS 过）。连带 T11 本轮被 429 console 报错误标 FAIL（限流触发，非 Edge Function 问题，T11 已单独核验通过）。
+- **测试基线（进程 #7）**：`_tmp/e2e_results.json` 39/41（仅 T6.1 环境限流 + 其连带 T11）。T9.2 曾一次性 FAIL 后复跑 PASS——测试固有竞态（快速连点 up/down 时 PATCH 顺序竞争），非代码回归。
 
 ## 已完成的工作
 
@@ -28,7 +33,7 @@
 | T8 | 普通用户无管理员入口 / 无审核权限 | ✅ |
 | T9 | 表态记录与切换、评论发布/列表/编辑/举报/删除 | ✅ |
 | T10 | 登出恢复、管理员入口消失 | ✅ |
-| T11 | 无页面 JS 错误 | ❌ Edge Function 旧版 CORS（需人工） |
+| T11 | 无页面 JS 错误 | ⚠️ 本轮 T6.1 限流连带 429 误标；Edge Function 已单独核验正常（进程 #7） |
 | Notion | Worker 5/5 端点（site/activities/works/contests/members）本地验证通过（历史轮次） | ✅ |
 | 竞赛 | anon 只读 200、管理员 CRUD 201/200、普通用户写 403（历史轮次） | ✅ |
 
@@ -44,12 +49,23 @@
 | T11 复核 | 有效管理员 JWT 直调 `send-audit-email` → 500 无 CORS 头 → 部署函数仍为旧版 | 🔎 需人工 |
 | 测试数据清理 | 删除 `signup_1786057381898@qq.com`、`pending_1786057385012@wzsf.local`、`pending_1786057771945@wzsf.local`；限流失败的 signup_* 未建号无需清理；E2E 预置用户保留；审核列表残留 = 0 | ✅ |
 
+### 本轮（自动化 AI 进程 #7）新增工作
+| 项 | 内容 | 结果 |
+|---|---|---|
+| T11 人工项跟进 | 用户按教程在控制台配置 env 并重新 Deploy 两个 Edge Function；实测 `send-audit-email`→200 ok、`submission-review`→200 真实列表，均带 CORS | ✅ **已解决** |
+| **JWT 过期修复** | `supabase.js`：保存 refresh_token + 新增 `SB.refresh()` + request 任意 401 自动续期重试；`auth.js` 监听 `sb-auth-changed` 事件同步界面 | ✅ |
+| JWT 修复验证 | 浏览器篡改 token 为无效 JWT 后表态 → 自动续期成功（"已记录你的表态"）、token 更新、无 JS 错误（`_tmp/jwt_test.py`，一次性） | ✅ |
+| E2E 回归 | 39/41（`_tmp/e2e_run_p7b.log`）：仅 T6.1 环境限流及其连带 T11（429 console）；T9 互动链路全 PASS，确认 JWT 改动无回归 | ⚠️ 环境项 |
+| T9.2 偶发 FAIL 排查 | 首次运行 T9.2 FAIL（down=0），复跑 PASS → 测试固有竞态（1.2s 间隔内 up 的 PATCH 与 down 的 GET/PATCH 竞争），非代码回归 | ✅ |
+| 测试数据清理 | 删除 4 个 `pending_*@wzsf.local` 测试用户；E2E 预置用户保留；审核列表残留 = 0 | ✅ |
+
 ### 修复过的问题（历史轮次，仍有效）
 1. **评论软删除 403（RLS 缺陷，T9.7）**：`comments_select` 策略已改为 `USING (status = 'active' OR auth.uid() = user_id)`，前端加 `status=eq.active` 过滤；线上库已同步执行。
 2. **审核页邮箱缺失（T7.3/T7.4）**：`_mkuser.mjs` 已写 `profiles.email`。
 3. **Edge Function 缺环境变量返回裸 500 且无 CORS 头（T11）**：`send-audit-email.ts`、`submission-review.ts` 已加 `envCheck()`（缺变量 → 501 + CORS 头 + 中文提示）。**需重新部署后生效**（见「需人工」#1）。
 4. **导航栏品牌文字登录态下折行**：`site/css/style.css` `.nav-links a` 加 `flex-shrink:0; white-space:nowrap`（2c6ab8b）及导航间距（4c98854）。进程 #5 强制重建后已随 4c98854 全量上线，本轮核验确认仍在线上。
 5. `.gitignore` 增加 `/_*.mjs`，防止含数据库凭据的临时脚本被提交。
+6. **JWT 过期报「操作失败：JWT expired」（进程 #7）**：自制客户端只存 access_token、无续期逻辑，登录超 1 小时后互动全挂。修复见「当前状态」。改动文件：`site/js/supabase.js`、`site/js/auth.js`。
 
 ### 环境准备
 - 依赖：前端纯静态，无 npm install 必要（`网站/` 的 `pg` 已安装，供临时 `_*.mjs` 直连 DB）；Worker 由 GitHub Actions 部署。
@@ -62,8 +78,8 @@
 
 | 项 | 原因分类 | 说明 |
 |---|---|---|
-| T11 Edge Function 无 CORS 头（500） | **需人工** | 远端函数缺 `RESEND_API_KEY` / `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 环境变量（进程 #6 复核：有效管理员 JWT 直调仍 500 无 CORS）。本环境无 Supabase CLI / 控制台权限（无 `SUPABASE_ACCESS_TOKEN`，`权限.txt` 中也没有），无法配置并重新 Deploy。代码修复（envCheck→501）已在仓库，**在控制台配好环境变量并重新 Deploy 即修复**，重跑 E2E 后 T11 应通过（预期 41/41）。 |
-| T6.1 邮件限流（429） | **环境可重试** | 本轮复发（`email rate limit exceeded`，定向重试 3/3 均限流）。属 Supabase 共享/环境级限流，历史上呈数小时级波动（进程 #3 持续数小时 → #4/#5 解除 → #6 复发）。等待解除后重跑 E2E 即可；链路本身已被多轮验证正常。 |
+| T11 Edge Function 无 CORS 头（500） | **已解决（进程 #7）** | 用户已在控制台为两个函数配置 env 并重新 Deploy，实测均 200 + CORS `*`。 |
+| T6.1 邮件限流（429） | **环境可重试** | 进程 #7 两轮均限流（`email rate limit exceeded`）。属 Supabase 共享/环境级限流，历史上呈数小时级波动（进程 #3 持续数小时 → #4/#5 解除 → #6/#7 复发）。等待解除后重跑 E2E 即可；链路本身已被多轮验证正常。 |
 | GitHub Pages 部署 | **已解决（进程 #5）+ 本轮核验通过** | 进程 #5 已用 `POST /pages/builds` 强制重建至最新版；本轮 `GET /pages` 状态 `built`、live 34/35 与仓库一致，无需再操作。若未来再出现线上滞后：先 `GET /pages/builds/latest` 看 status，若 errored/building 卡住，直接 `POST /pages/builds` 强制重建（约 1 次/10 分钟限制）。 |
 
 ## 对下一个 AI 的建议
@@ -72,13 +88,10 @@
    - **不要用裸 SHA1 比对 live vs 本地文件**（会因 CRLF 伪差误报，进程 #6 已验证）。正确姿势：PowerShell 下载 live 全站 → `git diff --no-index` 比对（git 自动忽略换行符）；或对比 `gh-pages` 分支与线上。预期结果：唯一真实差异为部署期重生成文章页的 `?v=2` 缓存号。
    - 若线上滞后：`POST https://api.github.com/repos/SNE-program/wenzhou-sf-club-site/pages/builds`（Authorization: Bearer <Token>）强制重建，轮询 `GET /pages/builds/latest` 至 status=built；若仍 errored，先 `PUT /pages`（body `{"source":{"branch":"gh-pages","path":"/"}}`）再重建。
    - 注意：本机 git push/fetch 需走系统代理（`git -c http.proxy=http://127.0.0.1:7890`）；api.github.com 直连正常；node fetch 不走系统代理（github.io 连不上），PowerShell 正常。
-1. **次高优先级（需人工，自动进程无法完成）**：在 Supabase 控制台为两个 Edge Function（`send-audit-email`、`submission-review`）配置环境变量并重新 Deploy：
-   - `RESEND_API_KEY`（取自根目录 `权限.txt`）
-   - `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`（同上）
-   - 部署后重跑 E2E，T11 应通过（预期 41/41）。
+1. ~~次高优先级（需人工）：Edge Function 环境变量~~ **已完成（进程 #7）**，T11 已通过单独核验。
 2. **可自动**：重跑 `python _tmp/e2e_test.py`。若 T6.1 仍 429（邮件限流复发中），属环境项，等待解除后重试即可；脚本已改为轮询等待（≤10s），不会再误报时序抖动。**跑完记得清理 signup/pending 用户**（见注意事项 #5）。
 3. **可选优化**：注册限流时前端直接透传英文错误「email rate limit exceeded」，可考虑在 `site/js/auth.js` 增加中文提示（非阻断，不急；保守原则下本轮未改产品代码）。
-4. 若人工项（Edge Function Deploy）完成后，重跑 E2E，预期 **41/41**。
+4. **待验证**：JWT 自动续期修复改动尚未提交/上线（工作区已改 `site/js/supabase.js`、`site/js/auth.js`）。提交推送到 main 后由 GitHub Actions 自动部署到线上；线上核验时注意这两处 `?v=` 缓存号更新。
 
 ## 重要注意事项
 
@@ -96,6 +109,6 @@
 ## 最后修改时间与标识
 
 - 最后修改时间：2026-08-07
-- 标识：**自动化 AI 进程 #6**（基于进程 #5 更新；E2E 39/41：T6.1 邮件限流复发=环境可重试、T11=需人工；线上核验通过 34/35 一致；测试脚本 T6.1 改为轮询消除时序抖动）
-- 测试基线：`_tmp/e2e_results.json`（39/41，本轮重跑）
-- 待办钩子：① 人工在 Supabase 控制台配置 Edge Function 环境变量并重新 Deploy（T11 → 41/41）；② 邮件限流解除后重跑 E2E 确认 T6.1 恢复 PASS（历史波动数小时级）；③ 后续 E2E 跑完用 `_cleanup_p4.mjs` + `_cleanup5.mjs` 清理测试用户。git 操作需走代理 `-c http.proxy=http://127.0.0.1:7890`。
+- 标识：**自动化 AI 进程 #7**（基于进程 #6 更新；T11 Edge Function 已人工解决并核验通过；新增 JWT 过期自动续期修复并验证无回归；E2E 39/41：仅 T6.1 环境限流及其连带 T11；测试数据已清理）
+- 测试基线：`_tmp/e2e_results.json`（39/41，进程 #7 重跑）
+- 待办钩子：① 邮件限流解除后重跑 E2E 确认 T6.1 恢复 PASS（历史波动数小时级）；② 后续 E2E 跑完用 `_cleanup_p4.mjs` + `_cleanup5.mjs` 清理测试用户；③ JWT 修复已改工作区，待提交推送部署。git 操作需走代理 `-c http.proxy=http://127.0.0.1:7890`。

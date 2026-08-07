@@ -239,6 +239,8 @@
       links.insertAdjacentHTML("beforeend", `<span id="auth-area"></span>`);
       render();
     }
+    // 会话被清除（如刷新 token 失败、登出）时同步界面
+    window.addEventListener("sb-auth-changed", render);
   });
 
   // 供其他页面调用：打开登录弹窗 / 读取当前用户资料

@@ -8,6 +8,7 @@ const SB = {
   url: "https://edfxoxcvprjzbemojshr.supabase.co",
   anon: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkZnhveGN2cHJqemJlbW9qc2hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTAzMDgsImV4cCI6MjEwMTUyNjMwOH0.ytkYFmJyYb00yBtYsxPE6Sh3HVmwrJfn2HuerFiV42U",
   TOKEN_KEY: "sb_token",
+  REFRESH_KEY: "sb_refresh",
   USER_KEY: "sb_user",
 
   // 会话
@@ -24,16 +25,37 @@ const SB = {
   saveSession(data) {
     if (data && data.access_token) {
       localStorage.setItem(this.TOKEN_KEY, data.access_token);
-      localStorage.setItem(this.USER_KEY, JSON.stringify(data.user));
+      if (data.refresh_token) localStorage.setItem(this.REFRESH_KEY, data.refresh_token);
+      if (data.user) localStorage.setItem(this.USER_KEY, JSON.stringify(data.user));
     }
   },
   clearSession() {
     localStorage.removeItem(this.TOKEN_KEY);
+    localStorage.removeItem(this.REFRESH_KEY);
     localStorage.removeItem(this.USER_KEY);
+    // 通知界面（auth.js）将登录态切回未登录
+    window.dispatchEvent(new CustomEvent("sb-auth-changed"));
+  },
+  // 用 refresh_token 换新 access_token；成功返回 true，失败清会话返回 false
+  async refresh() {
+    const rt = localStorage.getItem(this.REFRESH_KEY);
+    if (!rt) return false;
+    const res = await fetch(this.url + "/auth/v1/token?grant_type=refresh_token", {
+      method: "POST",
+      headers: { apikey: this.anon, "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: rt }),
+    });
+    const data = await res.json().catch(() => null);
+    if (res.ok && data && data.access_token) {
+      this.saveSession(data);
+      return true;
+    }
+    this.clearSession();
+    return false;
   },
 
-  // 基础请求
-  async request(path, opts = {}) {
+  // 基础请求（isRetry 用于 JWT 过期续期后重试，防止无限循环）
+  async request(path, opts = {}, isRetry = false) {
     const headers = { apikey: this.anon, ...(opts.headers || {}) };
     const token = this.token();
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -44,6 +66,12 @@ const SB = {
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;
     if (!res.ok) {
+      // 401（token 过期/被撤销/无效）：自动用 refresh_token 续期后重试一次
+      if (!isRetry && res.status === 401) {
+        const refreshed = await this.refresh();
+        if (refreshed) return this.request(path, opts, true);
+        throw new Error("登录已过期，请重新登录");
+      }
       throw new Error((data && (data.msg || data.message || data.error_description)) || `请求失败 ${res.status}`);
     }
     return data;
