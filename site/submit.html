@@ -220,7 +220,13 @@
         if (!file) return "";
         if (file.size > MAX_FILE) throw new Error("单个文件不能超过 10MB");
         const uid = (SB.user() || {}).id || "anon";
-        const safe = String(file.name || "file").replace(/[\\/:*?"<>|#%&{}$!'@+`=]/g, "_").slice(0, 60) || "file";
+        // 文件名清理：替换路径非法字符；非 ASCII（中文等）一律转下划线，避免 Storage InvalidKey
+        const safe = String(file.name || "file")
+          .replace(/[\\/:*?"<>|#%&{}$!'@+`=]/g, "_")
+          .replace(/[^\x00-\x7F]/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^_|_$/g, "")
+          .slice(0, 60) || "file";
         const path = `submissions/${uid}/${Date.now()}_${safe}`;
         return SB.uploadFile(path, file);
       }

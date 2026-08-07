@@ -113,13 +113,13 @@ const SB = {
   // ---- Storage（文件上传，需登录；用于投稿封面/附件）----
   BUCKET: "uploads",
   publicUrl(path) {
-    return `${this.url}/storage/v1/object/public/${path}`;
+    return `${this.url}/storage/v1/object/public/${this.BUCKET}/${path}`;
   },
   // 上传文件到公开 bucket，返回公开 URL。内部处理 401 续期重试。
   async uploadFile(path, file, isRetry = false) {
     const token = this.token();
     if (!token) throw new Error("请先登录");
-    const res = await fetch(`${this.url}/storage/v1/object/${path}`, {
+    const res = await fetch(`${this.url}/storage/v1/object/${this.BUCKET}/${path}`, {
       method: "POST",
       headers: {
         apikey: this.anon,
