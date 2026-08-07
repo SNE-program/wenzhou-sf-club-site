@@ -5,16 +5,28 @@
 
 ## 当前状态
 
-✅ **40/41 E2E 通过（进程 #10 复验）**：唯一失败为 T6.1 Supabase 邮件限流（环境项，历史波动数小时级）。T9 表态/评论全链路、T11 无 JS 错误均 PASS。**所有代码改动已推送至 GitHub main 分支（1b63aea + 777a929，进程 #10 确认推送完成），GitHub Actions 将自动部署 Pages。**
+✅ **40/41 E2E 通过（进程 #11 复验）**：唯一失败为 T6.1 Supabase 邮件限流（环境项，历史波动数小时级）。T9 表态/评论全链路、T11 无 JS 错误均 PASS。**进程 #11 新增 2 项低风险优化（O5 表态计数乐观更新、O6 评论加载占位），已提交 `a3df0fe`，全量回归 40/41 无回归。**
 
 - ✅ **进程 #8 P0 优化已提交推送**：正文阅读 + 全文搜索、举报/评论管理闭环（2 个新管理页 + 4 条 RLS 策略 + 防重复举报索引，线上库已执行）。进程 #10 复验 E2E 40/41 确认无回归。
 - ✅ **进程 #9 优化落地 4 项**：认证错误中文化（O1）、E2E 脚本 429 误报过滤与竞态轮询（O2/O2b，仅 `_tmp/` 不入库）、移动端适配检查通过（O3，无需修复）、评论提交防重复（O4）。均经全量回归验证。
-- ⚠️ **T6.1 邮件限流仍在（环境可重试）**：进程 #10 复验仍 `email rate limit exceeded`。链路本身健康（进程 #4/#5 完整 PASS 过）。等待限流解除后重跑 `_tmp/e2e_test.py` 即可。
-- 🔎 **进程 #9 发现并发活动主体仍在环境中**（`_tmp/probe_rest_p9.mjs`、e2e_user 重建等），进程 #10 复验前已清理数据（`_cleanup_all_p9.mjs`），本次 E2E 未再受干扰。若你的测试数据异常消失，优先排查并发进程。
-- ⚠️ **进程 #10 修正（重要）**：进程 #9 的 HANDOFF 声称"已推送到 GitHub"，但实际当时本地领先 origin/main 2 个提交（推送未成功）。进程 #10 已补推完成（`993464b..777a929`）。
+- ✅ **进程 #11 优化落地 2 项**：表态计数乐观更新即时反馈（O5，延迟注入验证 0.81s 反馈 vs 旧代码 ≥5s）、评论加载占位提示（O6）。均经全量回归验证。
+- ⚠️ **T6.1 邮件限流仍在（环境可重试）**：进程 #11 复验仍 `email rate limit exceeded`。链路本身健康（进程 #4/#5 完整 PASS 过）。等待限流解除后重跑 `_tmp/e2e_test.py` 即可。
 - 🛠 **网络修复（进程 #10）**：github.com 亚洲边缘 IP（20.205.243.166）被网络阻断，DNS 解析落在此 IP 导致 git fetch/push 全部失败（代理 7890 未运行）。已通过修改 `C:\Windows\System32\drivers\etc\hosts` 将 github.com/api.github.com/codeload.github.com 强制解析到可达 IP（140.82.112.3 / 20.27.177.113），git 恢复可用。
 
 ## 已完成的工作
+
+### 本轮（自动化 AI 进程 #11）工作
+| 项 | 内容 | 结果 |
+|---|---|---|
+| 初始检查 | 读取 `权限.txt`、进程 #10 HANDOFF、README；确认 8080 服务在跑、git 仓库在 `网站/` 子目录、git 在 `C:\Program Files\Git\cmd`（不在 PATH，需前缀） | ✅ |
+| 环境准备 | 安装 Playwright 1.62 + Chromium（Python 3.10，此前缺失） | ✅ |
+| E2E 基线 | 清理后跑 `_tmp/e2e_test.py`：40/41，唯一失败 T6.1 邮件限流（环境项） | ✅ 与 #10 一致 |
+| **O5 表态计数乐观更新** | `site/js/article.js` `setVote`：PATCH/INSERT 成功后本地立即调整 up/down 计数并提示，再后台 `refreshVoteCounts()` 校正（不再串行等待第二次 GET）；新增 `adjustVoteCountsLocal`/`refreshVoteCounts` | ✅ 已提交 |
+| O5 效果验证 | async 延迟注入（全量计数 GET 延迟 5s）：点击表态后 hint 0.81s 出现（旧代码需 ≥5s 等第二次 GET），后台校正后计数正确 | ✅ 针对性 PASS |
+| **O6 评论加载占位** | `loadComments` 首次加载时显示「评论加载中…」占位，避免空白 | ✅ 已提交 |
+| E2E 回归 | O5+O6 后全量回归 40/41（T9.1/T9.2/T9.4/T11 全 PASS），无回归 | ✅ |
+| 数据清理 | `_cleanup_all_p9.mjs`（在 `网站/` 目录运行）清理投票/评论/举报残留 | ✅ |
+| 提交 | commit `a3df0fe`（article.js +35/-9） | ✅ |
 
 ### 本轮（自动化 AI 进程 #10）工作
 | 项 | 内容 | 结果 |
@@ -80,6 +92,15 @@
 
 放弃项：无（未实施任何放弃项）。
 
+## 优化记录（进程 #11）
+
+| 优化 | 内容 | 验证方式 | 效果 |
+|---|---|---|---|
+| O5 表态计数乐观更新 | `article.js` setVote 写入成功后本地立即调整 up/down 计数并提示，后台 `refreshVoteCounts()` 校正；减少一次串行 GET | 延迟注入验证（全量计数 GET 延迟 5s）：hint 0.81s 出现 vs 旧代码 ≥5s；E2E T9.1/T9.2 全 PASS | 点击反馈从「等两次 GET」降为「一次 GET+PATCH」，保留刷新校正语义，不改变业务输出 |
+| O6 评论加载占位 | `loadComments` 首次加载显示「评论加载中…」 | E2E T9.4（评论出现）PASS + T11 无 JS 错误 | 消除加载空白，无行为变更 |
+
+放弃项：无。评估过的候选（未实施）：移动端已由 #9 验证无需改动；静态资源体积（style.css 89.8KB，GitHub Pages 自动压缩，收益低风险高）放弃。
+
 ## 跳过的链路及原因
 
 | 项 | 原因分类 | 说明 |
@@ -89,11 +110,11 @@
 
 ## 对下一个 AI 的建议
 
-0. **推送已完成（进程 #10 确认）**：main 已含 1b63aea + 777a929 并同步至 origin/main。若 GitHub Actions 部署完成，建议核验线上（方法见注意事项：git diff --no-index 比对 live vs 仓库，预期唯一差异为 `?v=2` 缓存号）。若线上滞后：`POST https://api.github.com/repos/SNE-program/wenzhou-sf-club-site/pages/builds`（Bearer <Token>）强制重建。
-1. **可自动**：重跑 `python _tmp/e2e_test.py`。若 T6.1 仍 429 属环境项；脚本已改为轮询等待（≤10s），T9 不会误报。跑完用 `node _cleanup_all_p9.mjs`（根目录，一键清理全部 E2E/verify 残留）清理测试数据。
-2. **注意并发主体**：若测试数据"神秘消失"或 e2e_user 的 uid 变化，说明环境中有其他进程在并行操作（进程 #9/#10 均观察到）。**不要删除 `_tmp/probe_rest_p9.mjs`**；测试前先清理起点，测试中遇数据异常优先怀疑并发而非代码回归。
-3. **网络（重要）**：本机 github.com 直连与代理（127.0.0.1:7890）当前均不可用，已通过 hosts 覆盖修复（`140.82.112.3 github.com` 等，见注意事项 10）。若 hosts 被还原或更换机器，git 失败时先 `Test-NetConnection` 各 GitHub IP（140.82.112/113/114/116.3 可达、20.205.243.166 不可达）再重写 hosts。
-4. **可选优化（低风险）**：setVote 成功后本地乐观更新计数（减少一次串行 GET，点击反馈更快）；需保持"刷新页面校正"语义，不得改变业务输出。历史轮次保守未做。
+0. **推送状态（进程 #11）**：main 已含 `a3df0fe`（O5+O6）待推送，推送前 `git pull --rebase`。若 GitHub Actions 部署完成，建议核验线上（方法见注意事项：git diff --no-index 比对 live vs 仓库，预期唯一差异为 `?v=2` 缓存号）。若线上滞后：`POST https://api.github.com/repos/SNE-program/wenzhou-sf-club-site/pages/builds`（Bearer <Token>）强制重建。
+1. **可自动**：重跑 `python _tmp/e2e_test.py`（cwd=根目录）。若 T6.1 仍 429 属环境项；脚本已改为轮询等待（≤10s），T9 不会误报。跑完清理测试数据：**`cd 网站 && node _cleanup_all_p9.mjs`（清理脚本在 `网站/` 下，不是根目录！进程 #11 踩过坑）**。
+2. **注意并发主体**：若测试数据"神秘消失"或 e2e_user 的 uid 变化，说明环境中有其他进程在并行操作（进程 #9/#10 均观察到）。**不要删除 `_tmp/probe_rest_p9.mjs`**；测试前先清理起点，测试中遇数据异常优先怀疑并发而非代码回归。T9.1 若出现「hint=已记录你的表态 up=0」多为上轮投票残留未清理，先清理再重跑，勿误判为回归。
+3. **网络（重要）**：本机 github.com 直连与代理（127.0.0.1:7890）当前均不可用，已通过 hosts 覆盖修复（`140.82.112.3 github.com` 等，见注意事项 11）。**git 不在 PATH**，运行 git 命令需先 `$env:PATH = 'C:\Program Files\Git\cmd;' + $env:PATH`。若 hosts 被还原或更换机器，git 失败时先 `Test-NetConnection` 各 GitHub IP（140.82.112/113/114/116.3 可达、20.205.243.166 不可达）再重写 hosts。
+4. **O5 已完成（原 #10 建议 4）**：setVote 乐观更新已实施（`a3df0fe`），无需再做；若需进一步，可考虑表态按钮处理中禁用（防连点），但需注意 E2E T9.2 连续切换节奏，收益低风险中等，建议保守。
 5. **注意**：git 身份已配置为 `SNE-program <SNE-program@users.noreply.github.com>`；push 无需额外参数（直连或 hosts 覆盖均可）。
 
 ## 重要注意事项
@@ -113,6 +134,6 @@
 ## 最后修改时间与标识
 
 - 最后修改时间：2026-08-07
-- 标识：**自动化 AI 进程 #10**（基于进程 #9 更新；复验 E2E 40/41 确认无 Bug 基线；修复 github.com 网络阻断；完成进程 #9 遗漏的推送 1b63aea + 777a929；清理测试数据）
-- 测试基线：`_tmp/e2e_results.json`（40/41，进程 #10 复验与进程 #9 终态一致）
-- 待办钩子：① 邮件限流解除后重跑 E2E 确认 T6.1 恢复 PASS（历史波动数小时级）；② 后续 E2E 跑完清理测试数据（`node _cleanup_all_p9.mjs`）；③ 关注线上部署结果（777a929 推送后 GitHub Actions 自动部署 Pages）；④ 如遇测试数据异常消失，检查是否有并发进程重建了 e2e 用户；⑤ 若 hosts 覆盖被还原导致 git 失败，按建议 3 重建。
+- 标识：**自动化 AI 进程 #11**（基于进程 #10 更新；复验 E2E 40/41 确认无 Bug 基线；实施并验证 O5 表态计数乐观更新 + O6 评论加载占位，提交 `a3df0fe` 待推送；清理测试数据）
+- 测试基线：`_tmp/e2e_results.json`（40/41，进程 #11 复验与进程 #10 一致）；进程 #11 回归日志 `_tmp/e2e_run_p11_final2.log`
+- 待办钩子：① 邮件限流解除后重跑 E2E 确认 T6.1 恢复 PASS（历史波动数小时级）；② **推送 `a3df0fe` 到 GitHub main**（本进程计划推送，若未完成下个进程补推，方法见建议 0/3）；③ 后续 E2E 跑完清理测试数据（在 `网站/` 目录运行 `node _cleanup_all_p9.mjs`）；④ 关注线上部署结果（推送后 GitHub Actions 自动部署 Pages）；⑤ 如遇测试数据异常消失，检查是否有并发进程重建了 e2e 用户；⑥ 若 hosts 覆盖被还原导致 git 失败，按建议 3 重建。
