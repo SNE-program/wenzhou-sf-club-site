@@ -1108,6 +1108,98 @@ a.card:hover { text-decoration: none; }
 .detail-body p { margin-bottom: 0.9rem; }
 .detail-body p:last-child { margin-bottom: 0; }
 
+/* ---------- 正文 Markdown 元素 ---------- */
+.detail-body h1,
+.detail-body h2,
+.detail-body h3,
+.detail-body h4 {
+  color: var(--text);
+  line-height: 1.45;
+  margin: 1.6rem 0 0.7rem;
+  scroll-margin-top: 1rem;
+}
+.detail-body h1 { font-size: 1.45rem; }
+.detail-body h2 { font-size: 1.28rem; }
+.detail-body h3 { font-size: 1.12rem; }
+.detail-body h4 { font-size: 1.02rem; }
+.detail-body ul,
+.detail-body ol {
+  margin: 0.6rem 0 0.9rem;
+  padding-left: 1.5rem;
+  color: var(--text-dim);
+}
+.detail-body ul { list-style: disc; }
+.detail-body ol { list-style: decimal; }
+.detail-body li { margin: 0.25rem 0; }
+.detail-body blockquote {
+  margin: 0.9rem 0;
+  padding: 0.55rem 1rem;
+  border-left: 3px solid var(--accent);
+  background: rgba(232, 177, 76, 0.08);
+  border-radius: 0 8px 8px 0;
+  color: var(--text-dim);
+}
+.detail-body code {
+  font-family: ui-monospace, "Cascadia Code", Consolas, "Courier New", monospace;
+  font-size: 0.88em;
+  background: rgba(232, 177, 76, 0.12);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.1em 0.4em;
+  color: var(--text);
+}
+.detail-body pre {
+  margin: 0.9rem 0;
+  padding: 0.9rem 1rem;
+  background: rgba(10, 14, 28, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow-x: auto;
+  line-height: 1.6;
+}
+.detail-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.88rem;
+  color: #e6e6f0;
+}
+.detail-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.9rem 0;
+  font-size: 0.92rem;
+  color: var(--text-dim);
+}
+.detail-body th,
+.detail-body td {
+  border: 1px solid var(--border);
+  padding: 0.45rem 0.7rem;
+  text-align: left;
+}
+.detail-body th {
+  background: rgba(232, 177, 76, 0.1);
+  color: var(--text);
+  font-weight: 600;
+}
+.detail-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+  margin: 0.6rem 0;
+}
+.detail-body a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.detail-body a:hover { color: var(--accent-2); }
+.detail-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.4rem 0;
+}
+html[data-theme="light"] .detail-body pre {
+  background: rgba(248, 244, 235, 0.92);
+}
+html[data-theme="light"] .detail-body pre code { color: #2d2a24; }
+
 /* ---------- 表态 ---------- */
 .vote-box {
   margin: 1.8rem 0;

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -21,7 +21,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="css/style.css?v=11">
+  <link rel="stylesheet" href="css/style.css?v=12">
   <style>
     .submit-form { max-width: 44rem; display: grid; gap: 1.1rem; }
     .s-field { display: grid; gap: 0.4rem; font-size: 0.95rem; color: var(--text); }
@@ -83,6 +83,9 @@
   <script src="js/api.js?v=5"></script>
   <script src="js/supabase.js?v=5"></script>
   <script src="js/auth.js?v=2"></script>
+  <!-- Word 转 Markdown（本地 vendor，仅选择 .docx/.docm 附件时用到） -->
+  <script src="js/vendor/mammoth.min.js"></script>
+  <script src="js/vendor/turndown.min.js"></script>
   <script>
     const FUNC_URL = `${SB.url}/functions/v1/submit-work`;
     const TYPE_OPTIONS = ["短篇小说", "世界观设定", "科普随笔", "其他"];
@@ -159,7 +162,9 @@
               <input type="file" id="s-file" hidden>
               <span class="s-fname" id="s-file-name">未选择附件</span>
             </div>
-            <span class="s-hint">可选。可附 1 个任意文件（Word / PDF / 压缩包 / 图片等，≤10MB），审核通过后会在作品页提供下载。</span>
+            <button class="btn ghost" type="button" id="s-to-md" hidden>转换为 Markdown</button>
+            <span class="s-hint" id="s-file-hint">可选。可附 1 个任意文件（Word / PDF / 压缩包 / 图片等，≤10MB），审核通过后会在作品页提供下载。</span>
+            <span class="s-hint" id="s-to-md-hint" hidden></span>
           </div>
 
           ${contests.length ? `
@@ -209,11 +214,57 @@
       fileInput.addEventListener("change", () => {
         const f = fileInput.files[0];
         const nameEl = document.getElementById("s-file-name");
+        const toMd = document.getElementById("s-to-md");
+        const toMdHint = document.getElementById("s-to-md-hint");
+        if (toMd) toMd.hidden = true;
+        if (toMdHint) toMdHint.hidden = true;
         if (!f) { nameEl.textContent = "未选择附件"; return; }
-        nameEl.textContent = f.size > MAX_FILE
-          ? "附件超过 10MB，请压缩后重试"
-          : `${f.name}（${(f.size / 1024 / 1024).toFixed(1)}MB）`;
+        if (f.size > MAX_FILE) {
+          nameEl.textContent = "附件超过 10MB，请压缩后重试";
+          return;
+        }
+        nameEl.textContent = `${f.name}（${(f.size / 1024 / 1024).toFixed(1)}MB）`;
+        // 仅 Word 附件（.docx / .docm）显示「转换为 Markdown」
+        if (/\.docx?$/i.test(f.name)) {
+          if (toMd) toMd.hidden = false;
+          if (toMdHint) { toMdHint.textContent = "选择此附件后，可一键把 Word 内容识别并写入上方「正文内容」。"; toMdHint.hidden = false; }
+        }
       });
+
+      // Word → Markdown：mammoth(Word→HTML) + turndown(HTML→Markdown)，纯浏览器本地完成
+      const toMd = document.getElementById("s-to-md");
+      if (toMd) {
+        toMd.addEventListener("click", async () => {
+          const f = fileInput.files[0];
+          const toMdHint = document.getElementById("s-to-md-hint");
+          if (!f) return;
+          if (!/\.docx?$/i.test(f.name)) { if (toMdHint) toMdHint.textContent = "仅支持 .docx / .docm 文件"; return; }
+          if (typeof window.mammoth !== "object" || typeof window.TurndownService !== "function") {
+            if (toMdHint) toMdHint.textContent = "转换组件加载失败，请刷新页面重试";
+            return;
+          }
+          toMd.disabled = true;
+          toMd.textContent = "转换中…";
+          try {
+            const arrayBuffer = await f.arrayBuffer();
+            const { value: html } = await window.mammoth.convertToHtml({ arrayBuffer });
+            const md = new window.TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" }).turndown(html);
+            const bodyEl = document.getElementById("s-body");
+            if (!md.trim()) throw new Error("未识别到文字内容");
+            bodyEl.value = md.trim() + "\n";
+            if (toMdHint) {
+              const extra = md.trim().length > 20000 ? "（识别内容较长，超出部分请在正文中精简）" : "";
+              toMdHint.textContent = `已把《${f.name}》识别为 Markdown 写入正文，请检查后提交。${extra}`;
+              toMdHint.hidden = false;
+            }
+          } catch (err) {
+            if (toMdHint) { toMdHint.textContent = "转换失败：" + (err.message || "未知错误") + "。可在正文中直接粘贴文本。"; toMdHint.hidden = false; }
+          } finally {
+            toMd.disabled = false;
+            toMd.textContent = "转换为 Markdown";
+          }
+        });
+      }
 
       // 上传单个文件到 Supabase Storage，返回公开 URL
       async function uploadOne(file) {

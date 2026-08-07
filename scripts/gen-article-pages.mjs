@@ -165,7 +165,7 @@ ${meta("twitter:card", "summary_large_image")}
     })();
   </script>
   <base href="../">
-  <link rel="stylesheet" href="css/style.css?v=11">
+  <link rel="stylesheet" href="css/style.css?v=12">
 </head>
 <body>
   <div data-nav></div>
@@ -207,7 +207,8 @@ ${meta("twitter:card", "summary_large_image")}
   <script src="js/api.js?v=5"></script>
   <script src="js/supabase.js?v=5"></script>
   <script src="js/auth.js"></script>
-  <script src="js/article.js?v=5"></script>
+  <script src="js/vendor/marked.min.js"></script>
+  <script src="js/article.js?v=6"></script>
 </body>
 </html>
 `;

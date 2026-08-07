@@ -67,13 +67,46 @@
     return TYPE === "activities" ? "activities.html" : "works.html";
   }
 
-  // 正文渲染：正文优先（多段落）；正文/简介为占位词（如“见附件”）且有附件时提示下载
+  // ---------- 正文渲染 ----------
+  // 简单 XSS 过滤：剥离脚本/iframe/表单等危险元素与事件属性
+  function sanitizeHtml(html) {
+    try {
+      const tpl = document.createElement("template");
+      tpl.innerHTML = html;
+      tpl.content
+        .querySelectorAll("script,iframe,object,embed,style,link,meta,form,input,button,textarea")
+        .forEach((el) => el.remove());
+      tpl.content.querySelectorAll("*").forEach((el) => {
+        for (const a of [...el.attributes]) {
+          const n = a.name.toLowerCase();
+          if (n.startsWith("on") || n === "srcdoc" || (n === "href" && /^\s*javascript:/i.test(a.value))) {
+            el.removeAttribute(a.name);
+          }
+        }
+      });
+      return tpl.innerHTML;
+    } catch (e) {
+      return String(html).replace(/<[^>]*>/g, "");
+    }
+  }
+
+  // Markdown → HTML（marked 不可用时降级为段落渲染）
+  function renderMarkdown(src) {
+    const md = window.marked && typeof window.marked.parse === "function" ? window.marked.parse : null;
+    const text = String(src == null ? "" : src);
+    if (!md) {
+      return text.split(/\n+/).map((s) => s.trim()).filter(Boolean).map((p) => `<p>${esc(p)}</p>`).join("");
+    }
+    return sanitizeHtml(md(text, { breaks: true, gfm: true }));
+  }
+
+  // 正文渲染：服务端转换产物 bodyHtml 优先 → 正文 Markdown → 简介 → 附件提示
   function bodyHTML(article) {
     const placeholder = /^(见附件|详见附件|附件见文件|暂无|无)$/i;
     const pick = (s) => { const t = (s || "").trim(); return placeholder.test(t) ? "" : t; };
+    if (article.bodyHtml && String(article.bodyHtml).trim()) return sanitizeHtml(article.bodyHtml);
     const text = pick(article.body) || pick(article.summary);
-    const paras = text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
-    if (paras.length) return paras.map((p) => `<p>${esc(p)}</p>`).join("");
+    if (text) return renderMarkdown(text);
     if (article.attachment && article.attachment.url)
       return `<p>本文以附件形式投稿，正文见下方附件，请下载查看。</p>`;
     return `<p>暂无内容</p>`;

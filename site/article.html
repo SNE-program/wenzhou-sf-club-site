@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -22,7 +22,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="css/style.css?v=11">
+  <link rel="stylesheet" href="css/style.css?v=12">
 </head>
 <body>
   <div data-nav></div>
@@ -63,6 +63,8 @@
   <script src="js/api.js?v=5"></script>
   <script src="js/supabase.js?v=5"></script>
   <script src="js/auth.js?v=2"></script>
-  <script src="js/article.js?v=5"></script>
+  <!-- Markdown 渲染（本地 vendor，不依赖 CDN） -->
+  <script src="js/vendor/marked.min.js"></script>
+  <script src="js/article.js?v=6"></script>
 </body>
 </html>
