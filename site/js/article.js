@@ -199,7 +199,9 @@
       renderComments(rows, nickMap);
       refreshCommentForm();
     } catch (e) {
-      list.innerHTML = `<div class="state">评论加载失败：${esc(e.message)}</div>`;
+      list.innerHTML = `<div class="state">评论加载失败：${esc(e.message)}<br><br><button class="btn" type="button" id="c-retry">重试</button></div>`;
+      const retry = document.getElementById("c-retry");
+      if (retry) retry.addEventListener("click", loadComments);
     }
   }
 
@@ -357,7 +359,9 @@
       try { myProfile = await window.getMyProfile(); } catch (e) { /* 资料加载失败不阻塞阅读 */ }
       renderArticle();
     } catch (e) {
-      document.getElementById("detail").innerHTML = `<div class="state">文章加载失败：${esc(e.message)}</div>`;
+      document.getElementById("detail").innerHTML = `<div class="state">文章加载失败：${esc(e.message)}<br><br><button class="btn" type="button" id="art-retry">重试</button></div>`;
+      const retry = document.getElementById("art-retry");
+      if (retry) retry.addEventListener("click", () => location.reload());
     }
   })();
 })();

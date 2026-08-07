@@ -143,7 +143,11 @@
               </div>
             </a>`).join("")
           : `<div class="state">暂无活动，敬请期待</div>`;
-      } catch (e) { console.warn(e); }
+      } catch (e) {
+        console.warn(e);
+        document.querySelector("#activities").innerHTML =
+          `<div class="state">活动加载失败，请检查网络后重试。<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+      }
 
       // 精选作品（取前 3 条）
       try {
@@ -162,7 +166,11 @@
               </div>
             </a>`).join("")
           : `<div class="state">暂无作品，期待你的投稿</div>`;
-      } catch (e) { console.warn(e); }
+      } catch (e) {
+        console.warn(e);
+        document.querySelector("#works").innerHTML =
+          `<div class="state">作品加载失败，请检查网络后重试。<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+      }
     })();
   </script>
 </body>
