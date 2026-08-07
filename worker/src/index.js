@@ -23,8 +23,13 @@
 
 const NOTION_VERSION = "2022-06-28";
 const CACHE_TTL = 60; // 秒
-const SITE_BASE = typeof SITE_BASE !== "undefined" ? SITE_BASE : "https://sne-program.github.io/wenzhou-sf-club-site";
-const RESEND_FROM = typeof RESEND_FROM !== "undefined" ? RESEND_FROM : "onboarding@resend.dev";
+// Cloudflare 将 vars 绑定以 const 注入，typeof 读取会触发 TDZ；改经 globalThis 安全读取
+const SITE_BASE = (globalThis.SITE_BASE && typeof globalThis.SITE_BASE === "string")
+  ? globalThis.SITE_BASE
+  : "https://wzmssf.club";
+const RESEND_FROM = (globalThis.RESEND_FROM && typeof globalThis.RESEND_FROM === "string")
+  ? globalThis.RESEND_FROM
+  : "onboarding@resend.dev";
 
 // ---------- CORS ----------
 function corsHeaders() {
@@ -467,7 +472,9 @@ async function handleScheduled() {
 // 内容变化时通过 repository_dispatch 触发 sync-notion 工作流重建静态数据
 // 并提交回 main（push 自动触发 GitHub Pages 部署）。需配置密钥 GH_TOKEN。
 // ============================================
-const GH_REPO = typeof GH_REPO !== "undefined" ? GH_REPO : "SNE-program/wenzhou-sf-club-site";
+const GH_REPO = (globalThis.GH_REPO && typeof globalThis.GH_REPO === "string")
+  ? globalThis.GH_REPO
+  : "SNE-program/wenzhou-sf-club-site";
 const SYNC_FILES = {
   site: "site.json",
   activities: "activities.json",

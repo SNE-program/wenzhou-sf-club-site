@@ -11,7 +11,7 @@ DB_WORKS = "3b339fd6-4004-8111-aac9-cf77c0c99eab"
 DB_MEMBERS = "3b339fd6-4004-81a1-a3a5-f3933823fcd6"
 DB_CONTESTS = "3b439fd6-4004-8100-8d7e-e7e049dd49b5"
 DB_SUBMISSIONS = "3b439fd6-4004-8093-b745-c8ee4f27c1a0"
-SITE_BASE = "https://sne-program.github.io/wenzhou-sf-club-site"
+SITE_BASE = "https://wzmssf.club"
 RESEND_FROM = "onboarding@resend.dev"
 GH_REPO = "SNE-program/wenzhou-sf-club-site"
 

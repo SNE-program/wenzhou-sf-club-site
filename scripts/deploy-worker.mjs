@@ -28,6 +28,8 @@ const vars = {
   DB_CONTESTS: "3b439fd6-4004-8100-8d7e-e7e049dd49b5",
   DB_SUBMISSIONS: "3b439fd6-4004-8093-b745-c8ee4f27c1a0",
   GH_REPO: "SNE-program/wenzhou-sf-club-site",
+  SITE_BASE: "https://wzmssf.club",
+  RESEND_FROM: "onboarding@resend.dev",
 };
 
 const bindings = Object.entries(vars).map(([name, text]) => ({ type: "plain_text", name, text }));
