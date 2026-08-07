@@ -52,10 +52,12 @@
       display: inline-flex; align-items: center; gap: 0.35rem;
       padding: 0.35rem 0.85rem; border: 1px solid var(--border); border-radius: 999px;
       cursor: pointer; font-size: 0.9rem; color: var(--text-dim);
-      background: var(--surface); user-select: none;
+      background: var(--surface); user-select: none; font-family: inherit; line-height: 1.4;
     }
-    .s-opt.on { border-color: var(--accent); color: var(--accent); background: var(--surface-hover); }
-    .s-opt input { display: none; }
+    .s-opt:hover { border-color: var(--text-dim); color: var(--text); }
+    .s-opt.on { border-color: var(--accent); color: var(--accent); background: var(--surface-hover); font-weight: 600; }
+    .file-pick { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+    .file-btn { margin: 0; }
     .s-meta { font-size: 0.85rem; color: var(--text-dim); margin: 0; }
     .submit-done { max-width: 40rem; text-align: center; padding: 2.5rem 1.5rem; }
     .submit-done .big { font-size: 1.15rem; font-weight: 700; color: var(--text); margin-bottom: 0.8rem; }
@@ -133,7 +135,7 @@
 
           <div class="s-field">投稿类型<span class="s-req">*</span>
             <div class="s-opts" id="s-types">
-              ${TYPE_OPTIONS.map((t) => `<label class="s-opt" data-v="${esc(t)}"><input type="checkbox">${esc(t)}</label>`).join("")}
+              ${TYPE_OPTIONS.map((t) => `<button type="button" class="s-opt" data-v="${esc(t)}">${esc(t)}</button>`).join("")}
             </div>
           </div>
 
@@ -141,23 +143,29 @@
             <textarea id="s-body" maxlength="20000" placeholder="粘贴或直接书写作品正文（支持换行，最长 20000 字）"></textarea>
           </label>
 
-          <label class="s-field">封面图片（可选）
-            <input type="file" id="s-cover" accept="image/*">
-            <span class="s-fname" id="s-cover-name">未选择图片</span>
+          <div class="s-field">封面图片（可选）
+            <div class="file-pick">
+              <label class="btn ghost file-btn" for="s-cover">选择图片</label>
+              <input type="file" id="s-cover" accept="image/*" hidden>
+              <span class="s-fname" id="s-cover-name">未选择图片</span>
+            </div>
             <img class="s-prev" id="s-cover-prev" alt="封面预览" hidden>
             <span class="s-hint">可选。本地上传一张图片作为封面（≤10MB），会在作品列表与文章页展示；不填则使用主题渐变封面。</span>
-          </label>
+          </div>
 
-          <label class="s-field">附件（可选）
-            <input type="file" id="s-file">
-            <span class="s-fname" id="s-file-name">未选择附件</span>
+          <div class="s-field">附件（可选）
+            <div class="file-pick">
+              <label class="btn ghost file-btn" for="s-file">选择附件</label>
+              <input type="file" id="s-file" hidden>
+              <span class="s-fname" id="s-file-name">未选择附件</span>
+            </div>
             <span class="s-hint">可选。可附 1 个任意文件（Word / PDF / 压缩包 / 图片等，≤10MB），审核通过后会在作品页提供下载。</span>
-          </label>
+          </div>
 
           ${contests.length ? `
           <div class="s-field">所属竞赛（可选）
             <div class="s-opts" id="s-contests">
-              ${contests.map((c) => `<label class="s-opt" data-v="${esc(c.title)}"><input type="checkbox">${esc(c.title)}</label>`).join("")}
+              ${contests.map((c) => `<button type="button" class="s-opt" data-v="${esc(c.title)}">${esc(c.title)}</button>`).join("")}
             </div>
           </div>` : ""}
 
