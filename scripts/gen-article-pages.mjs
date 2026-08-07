@@ -143,6 +143,7 @@ function articlePageHTML({ id, type, title, summary, date, image }) {
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escHtml(title)} · 温州中学科学及幻想文学社</title>
 ${meta("description", siteDesc)}

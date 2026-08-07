@@ -34,6 +34,27 @@
       : null;
   }
 
+  // GoTrue / 网络常见英文错误 → 中文友好提示（仅显示层，不改业务逻辑；与 auth.js friendlyAuthError 一致）
+  function friendlyErr(err) {
+    const m = String((err && err.message) || err || "");
+    const map = [
+      [/rate limit/i, "操作过于频繁，请稍后再试"],
+      [/too many requests/i, "请求过于频繁，请稍后再试"],
+      [/network|fetch failed|failed to fetch|load failed|typeerror/i, "网络异常，请检查网络后重试"],
+      [/timeout|timed out|abort/i, "请求超时，请重试"],
+      [/permission denied|forbidden/i, "你没有权限执行此操作"],
+      [/not found/i, "内容不存在或已删除"],
+    ];
+    for (const [re, text] of map) if (re.test(m)) return text;
+    return null;
+  }
+
+  // 统一错误文案：审核提示优先，其次中文化，最后保留原始信息
+  function errText(err) {
+    const m = (err && err.message) || err || "";
+    return auditMsg(m) || friendlyErr(m) || String(m);
+  }
+
   function timeLabel(iso) {
     if (!iso) return "";
     const d = new Date(iso);
@@ -105,7 +126,7 @@
       }
       renderVoteButtons();
     } catch (e) {
-      hint("vote-hint", "表态加载失败：" + e.message);
+      hint("vote-hint", "表态加载失败：" + errText(e));
     }
   }
 
@@ -174,7 +195,7 @@
       hint("vote-hint", "已记录你的表态", true);
       refreshVoteCounts(); // 后台校正，不阻塞
     } catch (e) {
-      hint("vote-hint", auditMsg(e.message) || "操作失败：" + e.message);
+      hint("vote-hint", "操作失败：" + errText(e));
     }
   }
 
@@ -199,7 +220,7 @@
       renderComments(rows, nickMap);
       refreshCommentForm();
     } catch (e) {
-      list.innerHTML = `<div class="state">评论加载失败：${esc(e.message)}<br><br><button class="btn" type="button" id="c-retry">重试</button></div>`;
+      list.innerHTML = `<div class="state">评论加载失败：${esc(errText(e))}<br><br><button class="btn" type="button" id="c-retry">重试</button></div>`;
       const retry = document.getElementById("c-retry");
       if (retry) retry.addEventListener("click", loadComments);
     }
@@ -289,7 +310,7 @@
       } else if (/duplicate|unique/i.test(e.message)) {
         hint("c-hint", "你已评论过这篇文章（可编辑或删除）");
       } else {
-        hint("c-hint", "发布失败：" + e.message);
+        hint("c-hint", "发布失败：" + errText(e));
       }
     } finally {
       submit.disabled = false;
@@ -316,7 +337,7 @@
         );
         loadComments();
       } catch (e) {
-        hint("c-hint", "保存失败：" + e.message);
+        hint("c-hint", "保存失败：" + errText(e));
       }
     });
   }
@@ -325,7 +346,7 @@
     if (!confirm("确定删除这条评论吗？")) return;
     SB.update("comments", { status: "deleted" }, `id=eq.${item.dataset.id}`)
       .then(() => { hint("c-hint", "评论已删除", true); loadComments(); })
-      .catch((e) => hint("c-hint", "删除失败：" + e.message));
+      .catch((e) => hint("c-hint", "删除失败：" + errText(e)));
   }
 
   function doReport(cid) {
@@ -335,7 +356,7 @@
     if (!reason) return;
     SB.insert("reports", { user_id: user.id, comment_id: cid, reason })
       .then(() => alert("已提交举报，我们会尽快处理。"))
-      .catch((e) => alert("举报失败：" + e.message));
+      .catch((e) => alert("举报失败：" + errText(e)));
   }
 
   // ---------- 初始化 ----------
