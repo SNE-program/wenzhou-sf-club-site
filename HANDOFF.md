@@ -5,7 +5,7 @@
 
 ## 当前状态
 
-✅ **进程 #16 投稿改为"仅注册用户"**：新增站内投稿页 `site/submit.html`（导航+关于页入口，登录后填写标题/类型/正文/封面/竞赛）与 Supabase Edge Function `scripts/submit-work.ts`（`withSupabase` 服务端校验登录 JWT，未登录 401，写入 Notion 投稿箱=待审核，审核/发布闭环不变）。外部 Notion 表单链接已从 about.html 移除。Notion 写入 payload 已实测通过（建页+归档自检）。提交 `c1a9a6f` 已推送。
+✅ **进程 #16 投稿改为"仅注册用户"**：新增站内投稿页 `site/submit.html`（导航+关于页入口，登录后填写标题/类型/正文/封面/竞赛）与 Supabase Edge Function `scripts/submit-work.ts`（`withSupabase` 服务端校验登录 JWT，未登录 401，写入 Notion 投稿箱=待审核，审核/发布闭环不变）。外部 Notion 表单链接已从 about.html 移除。Notion 写入 payload 已实测通过（建页+归档自检）。提交 `25f2da8` 已推送（`621e1a3..25f2da8`，走 20.205.243.166 可达；git push 首轮 4 旧 IP 均 Connection reset，扩大 IP 池后 DNS 默认亚洲 IP 一次成功）。
 
 ✅ **进程 #15 修复内容同步 Bug（网站与 Notion 长期不一致）**：根因是 GitHub Actions 的 `schedule` 不可靠（实测近 48 次运行仅 7 次 schedule，间隔 1.5~6 小时；且仓库闲置 60 天会停摆）。已改为 **Cloudflare Worker 每 5 分钟对比 Notion 与仓库 main 分支数据指纹，内容变化时 `repository_dispatch` 触发新增的 `sync-notion.yml` 重建静态数据并提交回 main**（push 自然触发 Pages 部署）。同时本地重新生成数据，把 Notion 当前最新内容（新增《文明四季年历》作品页、站点简介与竞赛更新）同步进 main/线上。提交 `3df8f04` 已推送（`65c6e18..3df8f04`，140.82.114.4 可达）。Worker 已 `wrangler deploy`（含 GH_REPO 变量 + GH_TOKEN 密钥）。
 
