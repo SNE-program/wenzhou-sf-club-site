@@ -5,6 +5,8 @@
 
 ## 当前状态
 
+✅ **进程 #18 正文 Markdown 渲染 + Word 附件一键转 Markdown**：① 文章正文渲染改为 **Markdown 优先**（`article.js` `bodyHTML`：`bodyHtml` → Markdown(`body`) → 简介 → 附件提示），`marked` 本地 vendor（`js/vendor/marked.min.js`）渲染，`sanitizeHtml` 剥离 script/iframe/on* 防 XSS；② 投稿页 **「转换为 Markdown」按钮**：选择 `.docx/.docm` 附件后显示，点击后 `mammoth`(Word→HTML) + `turndown`(HTML→Markdown) 纯浏览器本地识别，重写正文 textarea；③ `style.css` 补充正文 Markdown 元素样式（标题/列表/引用/代码/表格/图片/hr）；④ 全站 `style.css?v=12`、文章页引入 marked vendor、`article.js?v=6`。**说明：Pandoc 为系统级二进制，无法在浏览器/Edge Function 沙箱运行，已用等价的纯前端 mammoth+turndown 实现**（已在真实浏览器实测：mammoth→turndown→marked 全链路 ALL OK）。提交 `ae63a37` 已推送（`ca9b2cc..ae63a37`，140.82.113.4 可达）。无需人工部署步骤（vendor 库随静态站走 Pages）。
+
 ✅ **进程 #17 投稿支持附件 + 封面本地上传**：投稿页封面由 URL 直链改为**本地图片上传**（≤10MB、即时预览），并新增 **1 个任意附件**（≤10MB）。文件通过 Supabase Storage（bucket `uploads`）上传，公开 URL 以 `external` 形式写入 Notion 投稿箱「附件」列；审核列表显示附件链接；审核通过后 Worker 转录附件到作品库「附件」列；文章详情页显示「📎 下载附件」。正文仍为纯文本。提交 `eda610f` 已推送。
 
 > ⚠️ **进程 #17 人工步骤（必做）**：
@@ -22,6 +24,18 @@
 > ⚠️ **进程 #16 遗留人工步骤（必做）**：`submit-work` Edge Function 尚未部署（无 Supabase CLI token）。请在 Supabase Dashboard → Edge Functions → `submission-review` → 复制其 Secrets（NOTION_TOKEN / DB_SUBMISSIONS 已有），新建 `submit-work` 粘贴 `scripts/submit-work.ts` 内容并 Deploy。部署后站内投稿才可用（未部署时 submit.html 提交会报"投稿服务未配置"）。
 
 ## 已完成的工作
+
+### 本轮（自动化 AI 进程 #18）工作
+| 项 | 内容 | 结果 |
+|---|---|---|
+| 需求澄清 | 用户要求"正文支持 Markdown 渲染 + 用 Pandoc 把只有 Word 附件的文章直接转换识别"；确认：仅 `.docx/.docm`、转换时机=投稿页选中附件后点击「转换为 Markdown」重写正文 | ✅ AskUserQuestion |
+| 可行性结论 | Pandoc 是系统级二进制，无法在浏览器 / Cloudflare Worker / Supabase Edge Function 沙箱运行；改用**纯前端等价方案**：`mammoth`(Word→HTML) + `turndown`(HTML→Markdown)，无需服务器 | ✅ 已说明 |
+| **O18 Markdown 渲染** | ① 本地 vendor 三库：`marked.min.js`(43KB)、`mammoth.min.js`(627KB)、`turndown.min.js`(26KB)（`site/js/vendor/`，不依赖 CDN）；② `article.js` 新增 `sanitizeHtml`+`renderMarkdown`，`bodyHTML` 渲染优先级 `bodyHtml`→Markdown→简介→附件提示；③ `article.html` + 生成页模板（gen-article-pages.mjs）+ 旧文章页均引入 marked vendor；④ `style.css` 补 Markdown 元素样式 | ✅ 代码完成 |
+| **O18 Word→Markdown** | `submit.html`：附件 change 检测 `.docx/.docm` 显示「转换为 Markdown」按钮；点击后 `mammoth.convertToHtml({arrayBuffer})` → `TurndownService().turndown(html)` → 重写 `#s-body` textarea（含 20000 字超长提示、失败兜底文案） | ✅ 代码完成 |
+| 语法校验 | article.js `node --check` OK；submit.html 内联脚本 `new Function` 2/2 OK | ✅ |
+| 浏览器实测 | 本地起 HTTP 服务 + 浏览器子代理：构造测试 .docx（Word 段落/标题）→ mammoth 解析出 HTML → turndown 转 Markdown → marked 渲染回 HTML，全链路 **ALL OK** | ✅ |
+| 缓存版本号 | 全站 `style.css?v=12`（替换 28 处）；文章页 `article.js?v=6` + marked vendor；残留 7 个旧模板文章页补 marked vendor 修复 | ✅ |
+| 部署 | 无需人工步骤（vendor 库随静态站走 GitHub Pages）；提交 `ae63a37` 已推送（140.82.113.4） | ✅ 已完成 |
 
 ### 本轮（自动化 AI 进程 #17）工作
 | 项 | 内容 | 结果 |
