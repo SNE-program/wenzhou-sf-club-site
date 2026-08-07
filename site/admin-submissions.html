@@ -115,7 +115,7 @@
                   <button class="c-btn audit-reject" type="button">拒绝</button>
                 </div>
               </div>`).join("")
-            : `<div class="state">当前没有待审核的投稿。投稿人会通过网站的「投稿箱」提交，提交后自动出现在这里。</div>`}`;
+            : `<div class="state">当前没有待审核的投稿。注册用户可通过网站的「投稿」页提交，提交后自动出现在这里。</div>`}`;
         root.querySelectorAll(".submit-item").forEach((item) => {
           const id = item.dataset.id;
           item.querySelector(".audit-pass").addEventListener("click", () => review(id, "approve"));

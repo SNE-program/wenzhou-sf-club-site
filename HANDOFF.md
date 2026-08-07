@@ -5,9 +5,23 @@
 
 ## 当前状态
 
+✅ **进程 #16 投稿改为"仅注册用户"**：新增站内投稿页 `site/submit.html`（导航+关于页入口，登录后填写标题/类型/正文/封面/竞赛）与 Supabase Edge Function `scripts/submit-work.ts`（`withSupabase` 服务端校验登录 JWT，未登录 401，写入 Notion 投稿箱=待审核，审核/发布闭环不变）。外部 Notion 表单链接已从 about.html 移除。Notion 写入 payload 已实测通过（建页+归档自检）。提交 `c1a9a6f` 已推送。
+
 ✅ **进程 #15 修复内容同步 Bug（网站与 Notion 长期不一致）**：根因是 GitHub Actions 的 `schedule` 不可靠（实测近 48 次运行仅 7 次 schedule，间隔 1.5~6 小时；且仓库闲置 60 天会停摆）。已改为 **Cloudflare Worker 每 5 分钟对比 Notion 与仓库 main 分支数据指纹，内容变化时 `repository_dispatch` 触发新增的 `sync-notion.yml` 重建静态数据并提交回 main**（push 自然触发 Pages 部署）。同时本地重新生成数据，把 Notion 当前最新内容（新增《文明四季年历》作品页、站点简介与竞赛更新）同步进 main/线上。提交 `3df8f04` 已推送（`65c6e18..3df8f04`，140.82.114.4 可达）。Worker 已 `wrangler deploy`（含 GH_REPO 变量 + GH_TOKEN 密钥）。
 
+> ⚠️ **进程 #16 遗留人工步骤（必做）**：`submit-work` Edge Function 尚未部署（无 Supabase CLI token）。请在 Supabase Dashboard → Edge Functions → `submission-review` → 复制其 Secrets（NOTION_TOKEN / DB_SUBMISSIONS 已有），新建 `submit-work` 粘贴 `scripts/submit-work.ts` 内容并 Deploy。部署后站内投稿才可用（未部署时 submit.html 提交会报"投稿服务未配置"）。
+
 ## 已完成的工作
+
+### 本轮（自动化 AI 进程 #16）工作
+| 项 | 内容 | 结果 |
+|---|---|---|
+| 需求澄清 | 用户要求"非注册账户不能投稿"；确认：仅注册+邮箱验证即可投稿、新增独立投稿页、移除外部 Notion 表单链接 | ✅ AskUserQuestion |
+| 现状分析 | 投稿原走外部 Notion 表单（无登录概念）；站内已有 Supabase Auth（auth.js/supabase.js 可直接复用）；Edge Function 走 supabase.co 国内可达 | ✅ |
+| **O16 投稿需登录** | ① 新增 `scripts/submit-work.ts`（withSupabase auth:"user" 服务端校验 → getUser 取昵称/邮箱 → 写 Notion 投稿箱[审核状态=待审核]，含清洗/限长/URL 校验，中文字符串 \uXXXX 转义）；② 新增 `site/submit.html`（登录门 + 表单 + 401 自动 refresh 重试 + 防重复提交）；③ `common.js` 导航加"投稿"；④ `about.html` 投稿入口改为站内页、移除 Notion 外链；⑤ `admin-submissions.html` 空态文案更新 | ✅ 代码完成 |
+| 校验 | submit.html 内联 JS 语法 OK；CSS 变量（--surface 等）确认存在；submit-work.ts 与已部署的 submission-review.ts 约定一致（注释中文、代码字符串转义） | ✅ |
+| Notion payload 实测 | `_tmp/verify_submit_notion.mjs`：以真实 token 创建投稿行（含 title/multi_select/status/files/external/contests）→ 200 → 立即归档删除 | ✅ 不留脏数据 |
+| 部署 | ⚠️ submit-work Edge Function **待人工 Dashboard 部署**（无 Supabase CLI token） | ⏳ 见上 |
 
 ### 本轮（自动化 AI 进程 #15）工作
 | 项 | 内容 | 结果 |
