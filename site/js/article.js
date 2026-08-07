@@ -71,9 +71,10 @@
   function bodyHTML(article) {
     const text = (article.body || article.summary || "").trim();
     const paras = text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
-    return paras.length
-      ? paras.map((p) => `<p>${esc(p)}</p>`).join("")
-      : `<p>${esc(article.summary || "暂无内容")}</p>`;
+    if (paras.length) return paras.map((p) => `<p>${esc(p)}</p>`).join("");
+    if (article.attachment && article.attachment.url)
+      return `<p>本文以附件形式投稿，正文见下方附件，请下载查看。</p>`;
+    return `<p>${esc(article.summary || "暂无内容")}</p>`;
   }
 
   // ---------- 文章渲染 ----------
