@@ -219,6 +219,42 @@ async function persistCovers(items) {
   }
 }
 
+/** 把 Notion 临时附件链接下载缓存到本地（永久有效，签名 URL 不再过期） */
+async function persistAttachments(items) {
+  const FILE_DIR = path.join(SITE_DIR, "files");
+  await mkdir(FILE_DIR, { recursive: true });
+  for (const it of items) {
+    const att = it.attachment;
+    if (!att || !att.url) { it.attachmentKey = null; continue; }
+    // 记录附件稳定标识（供 Worker 同步指纹对比；Notion 签名链接本身会轮换）
+    it.attachmentKey = coverStableKey(att.url);
+    // 仅处理 Notion 临时文件（S3 签名 URL），外链原样保留
+    if (!/prod-files|amazonaws|X-Amz-|x-amz-/i.test(att.url)) continue;
+    try {
+      const res = await fetch(att.url);
+      if (!res.ok) { it.attachment = null; it.attachmentKey = null; continue; }
+      const buf = Buffer.from(await res.arrayBuffer());
+      const mime = (res.headers.get("content-type") || "").toLowerCase();
+      const extMatch = mime.match(/(?:pdf|zip|rar|7z|docx?|xlsx?|pptx?|txt|md|jpg|jpeg|png)/);
+      const ext = extMatch ? "." + extMatch[0] : "";
+      const safeName = String(att.name || "attachment")
+        .replace(/[\\/:*?"<>|#%&{}$!'@+`=]/g, "_")
+        .replace(/[^\x00-\x7F]/g, "_")
+        .replace(/_+/g, "_")
+        .replace(/^_|_$/g, "")
+        .slice(0, 50);
+      const stem = safeName.replace(/\.[a-zA-Z0-9]+$/, "");
+      const baseName = !/[a-zA-Z0-9]/.test(stem) ? "file" : safeName;
+      const name = `${it.id.slice(0, 8)}_${baseName}${ext}`;
+      await writeFile(path.join(FILE_DIR, name), buf);
+      it.attachment = { name: att.name || name, url: `files/${name}` };
+      console.log(`[gen-site-data]   ↳ 附件已缓存：files/${name}（${buf.length}B）`);
+    } catch {
+      it.attachment = null; it.attachmentKey = null; // 下载失败则降级隐藏
+    }
+  }
+}
+
 await mkdir(DATA_DIR, { recursive: true });
 let total = 0;
 for (const [file, loader] of Object.entries(sections)) {
@@ -226,6 +262,7 @@ for (const [file, loader] of Object.entries(sections)) {
     const data = await loader();
     if (Array.isArray(data) && (file === "works.json" || file === "activities.json")) {
       await persistCovers(data);
+      if (file === "works.json") await persistAttachments(data);
     }
     await writeFile(path.join(DATA_DIR, file), JSON.stringify(data, null, 2) + "\n", "utf8");
     const n = Array.isArray(data) ? data.length : 1;

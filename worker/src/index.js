@@ -488,10 +488,19 @@ function coverKeyOf(url) {
   }
 }
 
-/** 单条指纹：剔除会轮换/本地化的 cover 字段，保留稳定的 coverKey */
+/** 单条指纹：剔除会轮换/本地化的 cover、attachment 字段，保留稳定的 coverKey / attachmentKey */
 function itemFingerprint(item) {
-  const { cover, ...rest } = item || {};
-  return { ...rest, coverKey: item && item.coverKey !== undefined ? item.coverKey : coverKeyOf(cover) };
+  const { cover, attachment, ...rest } = item || {};
+  return {
+    ...rest,
+    coverKey: item && item.coverKey !== undefined ? item.coverKey : coverKeyOf(cover),
+    attachmentKey:
+      item && item.attachmentKey !== undefined
+        ? item.attachmentKey
+        : item && item.attachment && item.attachment.url
+          ? coverKeyOf(item.attachment.url)
+          : null,
+  };
 }
 
 /** 区块指纹：数组按稳定键排序，消除 Notion 返回顺序波动 */
