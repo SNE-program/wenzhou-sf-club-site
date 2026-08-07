@@ -56,7 +56,7 @@
       try {
         rows = await SB.get("contests", "select=*&order=sort_order.asc");
       } catch (e) {
-        root.innerHTML = `<div class="state">加载失败：${esc(e.message)}</div>`;
+        root.innerHTML = `<div class="state">加载失败：${esc(e.message)}<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
         return;
       }
 

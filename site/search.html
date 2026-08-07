@@ -120,7 +120,7 @@
         }
         box.innerHTML = html;
       } catch (e) {
-        box.innerHTML = `<p class="search-none">搜索失败：${esc(e.message)}</p>`;
+        box.innerHTML = `<p class="search-none">搜索失败：${esc(e.message)}<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></p>`;
         console.error(e);
       }
     })();

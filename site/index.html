@@ -124,7 +124,14 @@
         if (site.name) nameEl.textContent = site.name;
         introEl.textContent = site.intro || introEl.textContent;
         document.title = (site.name || document.title) + " · 温中科幻社";
-      } catch (e) { console.warn(e); }
+      } catch (e) {
+        console.warn(e);
+        // 站点信息加载失败：降级为默认简介，避免停留在「正在载入社团简介……」
+        const introEl = document.querySelector("#hero-intro");
+        if (introEl && introEl.textContent.includes("正在载入")) {
+          introEl.textContent = "读科幻、写幻想、观星象、聊未来。";
+        }
+      }
 
       // 近期活动（取前 3 条）
       try {
