@@ -67,14 +67,16 @@
     return TYPE === "activities" ? "activities.html" : "works.html";
   }
 
-  // 正文渲染：正文优先（多段落），无正文时回退到简介
+  // 正文渲染：正文优先（多段落）；正文/简介为占位词（如“见附件”）且有附件时提示下载
   function bodyHTML(article) {
-    const text = (article.body || article.summary || "").trim();
+    const placeholder = /^(见附件|详见附件|附件见文件|暂无|无)$/i;
+    const pick = (s) => { const t = (s || "").trim(); return placeholder.test(t) ? "" : t; };
+    const text = pick(article.body) || pick(article.summary);
     const paras = text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
     if (paras.length) return paras.map((p) => `<p>${esc(p)}</p>`).join("");
     if (article.attachment && article.attachment.url)
       return `<p>本文以附件形式投稿，正文见下方附件，请下载查看。</p>`;
-    return `<p>${esc(article.summary || "暂无内容")}</p>`;
+    return `<p>暂无内容</p>`;
   }
 
   // ---------- 文章渲染 ----------

@@ -101,6 +101,13 @@
       });
 
       // ---------- 作品网格 ----------
+      // 摘要为占位词（如“见附件”）且存在附件时，卡片显示引导文案
+      function cardSummary(it) {
+        const s = (it.summary || "").trim();
+        if ((/^(见附件|详见附件|附件见文件|暂无|无)$/.test(s) || !s) && it.attachment)
+          return "附件投稿 · 点击查看";
+        return s;
+      }
       function renderGrid() {
         const list = works.filter(match);
         document.querySelector("#works").innerHTML = list.length
@@ -109,7 +116,7 @@
               <div class="card-cover" style="${coverStyle(it, it.title)}">${initialOf(it.title)}</div>
               <div class="card-body">
                 <h3>${esc(it.title)}</h3>
-                <p>${esc(it.summary)}</p>
+                <p>${esc(cardSummary(it))}</p>
                 <div class="card-meta">
                   <span>${esc(it.category || "未分类")}</span>
                   ${it.author ? `<span>${esc(it.author)}</span>` : ""}
