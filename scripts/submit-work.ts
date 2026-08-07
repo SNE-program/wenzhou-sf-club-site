@@ -53,6 +53,7 @@ const S = {
   cover: "\u5c01\u9762", // 封面
   email: "\u90ae\u7bb1", // 邮箱
   contests: "\u6240\u5c5e\u7ade\u8d5b", // 所属竞赛
+  attachment: "\u9644\u4ef6", // 附件
   status: "\u5ba1\u6838\u72b6\u6001", // 审核状态
   pending: "\u5f85\u5ba1\u6838", // 待审核
 };
@@ -73,6 +74,14 @@ async function createSubmitPage(data) {
   if (data.contests && data.contests.length) {
     properties[S.contests] = { multi_select: data.contests.map((n) => ({ name: n })) };
   }
+  if (data.attachment && data.attachment.url) {
+    properties[S.attachment] = {
+      files: [{ name: data.attachment.name || "attachment", external: { url: data.attachment.url } }],
+    };
+  }
+
+  const mkBody = () =>
+    JSON.stringify({ parent: { database_id: DB_SUBMISSIONS }, properties });
 
   const res = await fetch("https://api.notion.com/v1/pages", {
     method: "POST",
@@ -81,13 +90,33 @@ async function createSubmitPage(data) {
       "Notion-Version": NOTION_VERSION,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ parent: { database_id: DB_SUBMISSIONS }, properties }),
+    body: mkBody(),
   });
   if (!res.ok) {
+    // 投稿箱缺「附件」列（未在 Notion 建列）时：去掉附件字段重试，保证投稿成功，并返回警示
+    if (res.status === 400 && properties[S.attachment]) {
+      delete properties[S.attachment];
+      const retry = await fetch("https://api.notion.com/v1/pages", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${NOTION_TOKEN}`,
+          "Notion-Version": NOTION_VERSION,
+          "Content-Type": "application/json",
+        },
+        body: mkBody(),
+      });
+      if (retry.ok) {
+        return {
+          page: await retry.json(),
+          warning:
+            "\u9644\u4ef6\u672a\u4fdd\u5b58\uff08\u6295\u7a3f\u7bb1\u7f3a\u5c11\u201c\u9644\u4ef6\u201d\u5217\uff0c\u8bf7\u544a\u77e5\u7ba1\u7406\u5458\uff09",
+        };
+      }
+    }
     const detail = await res.text().catch(() => "");
     throw new Error(`\u6295\u7a3f\u5931\u8d25 ${res.status}${detail ? ": " + detail.slice(0, 300) : ""}`);
   }
-  return res.json();
+  return { page: await res.json() };
 }
 
 /** 清洗字符串并限长 */
@@ -130,6 +159,14 @@ export default {
       : [];
     let cover = clean(body.cover, 2000) || "";
     if (cover && !/^https?:\/\//i.test(cover)) cover = "";
+    // 附件：仅接受 http(s) 公开 URL（由前端上传到 Supabase Storage 后获得）+ 文件名
+    let attachment = null;
+    if (body.attachment && typeof body.attachment === "object") {
+      const aurl = clean(body.attachment.url, 2000);
+      if (aurl && /^https?:\/\//i.test(aurl)) {
+        attachment = { url: aurl, name: clean(body.attachment.name, 120) || "attachment" };
+      }
+    }
 
     // 获取登录用户信息（笔名默认用注册昵称）
     const supabase = createClient(
@@ -153,7 +190,7 @@ export default {
     const nickname = clean(body.nickname, 20) || (me && me.nickname) || (user.user_metadata && user.user_metadata.nickname) || "\u661f\u5c18";
 
     try {
-      const page = await createSubmitPage({
+      const { page, warning } = await createSubmitPage({
         title,
         author: nickname,
         types,
@@ -161,8 +198,11 @@ export default {
         cover,
         email: user.email || "",
         contests,
+        attachment,
       });
-      return Response.json({ ok: true, id: page.id });
+      const resp = { ok: true, id: page.id };
+      if (warning) resp.warning = warning;
+      return Response.json(resp);
     } catch (e) {
       return Response.json({ error: e.message }, { status: 502 });
     }

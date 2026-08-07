@@ -223,6 +223,13 @@ addEventListener("fetch", (event) => {
 function mapSubmission(row) {
   const p = row.properties || {};
   const cover = propCover(p["封面"]);
+  const attFile = p["附件"] && p["附件"].files && p["附件"].files[0] ? p["附件"].files[0] : null;
+  const attachment = attFile
+    ? {
+        name: attFile.name || "",
+        url: attFile.type === "external" ? attFile.external.url : (attFile.file || {}).url || "",
+      }
+    : null;
   return {
     id: row.id,
     title: propText(p["作品标题"]),
@@ -230,6 +237,7 @@ function mapSubmission(row) {
     types: p["投稿类型"]?.type === "multi_select" ? p["投稿类型"].multi_select.map((s) => s.name) : [],
     body: propText(p["正文内容"]),
     cover, // null 或 {type:"external"|"file", url}
+    attachment, // null 或 {name, url}
     email: propText(p["邮箱"]),
     contests: p["所属竞赛"]?.type === "multi_select" ? p["所属竞赛"].multi_select.map((s) => s.name) : [],
     created: p["提交时间"]?.type === "created_time" ? p["提交时间"].created_time : "",
@@ -294,6 +302,14 @@ async function createWorkPage(sub) {
   if (sub.cover && sub.cover.type === "external" && sub.cover.url) {
     properties["封面"] = { files: [{ name: "cover", external: { url: sub.cover.url } }] };
   }
+  if (sub.attachment && sub.attachment.url) {
+    properties["附件"] = {
+      files: [{ name: sub.attachment.name || "attachment", external: { url: sub.attachment.url } }],
+    };
+  }
+
+  const mkBody = () =>
+    JSON.stringify({ parent: { database_id: DB_WORKS }, properties });
 
   const res = await fetch("https://api.notion.com/v1/pages", {
     method: "POST",
@@ -302,9 +318,25 @@ async function createWorkPage(sub) {
       "Notion-Version": NOTION_VERSION,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ parent: { database_id: DB_WORKS }, properties }),
+    body: mkBody(),
   });
-  if (!res.ok) throw new Error(`创建作品失败 ${res.status}`);
+  if (!res.ok) {
+    // 作品库缺「附件」列时：去掉附件字段重试，保证作品创建成功（附件下次在投稿箱仍可查看）
+    if (res.status === 400 && properties["附件"]) {
+      delete properties["附件"];
+      const retry = await fetch("https://api.notion.com/v1/pages", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${NOTION_TOKEN}`,
+          "Notion-Version": NOTION_VERSION,
+          "Content-Type": "application/json",
+        },
+        body: mkBody(),
+      });
+      if (retry.ok) return (await retry.json()).id;
+    }
+    throw new Error(`创建作品失败 ${res.status}`);
+  }
   return (await res.json()).id;
 }
 

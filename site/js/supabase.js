@@ -110,6 +110,41 @@ const SB = {
     });
   },
 
+  // ---- Storage（文件上传，需登录；用于投稿封面/附件）----
+  BUCKET: "uploads",
+  publicUrl(path) {
+    return `${this.url}/storage/v1/object/public/${path}`;
+  },
+  // 上传文件到公开 bucket，返回公开 URL。内部处理 401 续期重试。
+  async uploadFile(path, file, isRetry = false) {
+    const token = this.token();
+    if (!token) throw new Error("请先登录");
+    const res = await fetch(`${this.url}/storage/v1/object/${path}`, {
+      method: "POST",
+      headers: {
+        apikey: this.anon,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": file.type || "application/octet-stream",
+        "x-upsert": "false",
+      },
+      body: file,
+    });
+    if (res.status === 401 && !isRetry) {
+      const refreshed = await this.refresh();
+      if (refreshed) return this.uploadFile(path, file, true);
+      throw new Error("登录已过期，请重新登录");
+    }
+    if (!res.ok) {
+      let msg = `上传失败 ${res.status}`;
+      try {
+        const j = await res.json();
+        if (j.message) msg = j.message;
+      } catch (e) {}
+      throw new Error(msg);
+    }
+    return this.publicUrl(path);
+  },
+
   // ---- 数据（PostgREST）----
   get(table, query) {
     return this.request(`/rest/v1/${table}?${query}`);

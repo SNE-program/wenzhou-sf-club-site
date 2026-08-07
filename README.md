@@ -35,7 +35,7 @@
 
 - 内容展示：首页（五环浑天仪三维动画）、活动、作品、成员、关于
 - 互动（Supabase）：注册/登录（邮箱验证）、入站审核（管理员审核页）、评论（每人每篇一条，可编辑/删除）、表态 up/down/no、举报
-- **投稿（仅注册用户）**：`site/submit.html` 登录后投稿 → Supabase Edge Function `submit-work` 服务端校验身份并写入 Notion 投稿箱 → 管理员在 `admin-submissions.html` 审核 → 通过后自动发布到「作品」并邮件通知投稿人
+- **投稿（仅注册用户）**：`site/submit.html` 登录后投稿（标题/类型/正文/封面图片本地上传/可附 1 个附件）→ Supabase Edge Function `submit-work` 服务端校验身份并写入 Notion 投稿箱 → 管理员在 `admin-submissions.html` 审核（可查看附件）→ 通过后自动发布到「作品」并在文章页提供附件下载 + 邮件通知投稿人
 - 分享卡片：所有页面含 OG meta；每条活动/作品自动生成静态详情页 `site/articles/<id>.html`（微信转发可正确显示卡片）
 - 主题：深空暗色 / 清新亮色一键切换，记忆选择，首次跟随系统
 - 筛选：作品按分类、活动按标签筛选（分类/标签反映在网址，可分享直达）

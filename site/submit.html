@@ -27,16 +27,23 @@
     .s-field { display: grid; gap: 0.4rem; font-size: 0.95rem; color: var(--text); }
     .s-field > input[type="text"],
     .s-field > input[type="url"],
-    .s-field > textarea {
+    .s-field > textarea,
+    .s-field > input[type="file"] {
       width: 100%; box-sizing: border-box;
       padding: 0.65rem 0.8rem; border-radius: 11px; font-size: 0.95rem;
       background: var(--surface); border: 1px solid var(--border); color: var(--text);
       font-family: inherit;
     }
+    .s-field > input[type="file"] { cursor: pointer; padding: 0.5rem 0.8rem; }
     .s-field > textarea { resize: vertical; min-height: 12rem; line-height: 1.7; }
     .s-field > input:focus, .s-field > textarea:focus {
       outline: none; border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(232, 177, 76, 0.12);
+    }
+    .s-fname { font-size: 0.85rem; color: var(--text-dim); word-break: break-all; }
+    .s-prev {
+      max-width: 12rem; max-height: 8rem; object-fit: cover;
+      border-radius: 10px; border: 1px solid var(--border);
     }
     .s-req { color: var(--danger); }
     .s-hint { font-size: 0.82rem; color: var(--text-dim); }
@@ -134,9 +141,17 @@
             <textarea id="s-body" maxlength="20000" placeholder="粘贴或直接书写作品正文（支持换行，最长 20000 字）"></textarea>
           </label>
 
-          <label class="s-field">封面图片直链（可选）
-            <input type="url" id="s-cover" maxlength="2000" placeholder="https://… 图片直链">
-            <span class="s-hint">可选。填写图片直链后会在作品列表与文章页展示；不填则使用主题渐变封面。</span>
+          <label class="s-field">封面图片（可选）
+            <input type="file" id="s-cover" accept="image/*">
+            <span class="s-fname" id="s-cover-name">未选择图片</span>
+            <img class="s-prev" id="s-cover-prev" alt="封面预览" hidden>
+            <span class="s-hint">可选。本地上传一张图片作为封面（≤10MB），会在作品列表与文章页展示；不填则使用主题渐变封面。</span>
+          </label>
+
+          <label class="s-field">附件（可选）
+            <input type="file" id="s-file">
+            <span class="s-fname" id="s-file-name">未选择附件</span>
+            <span class="s-hint">可选。可附 1 个任意文件（Word / PDF / 压缩包 / 图片等，≤10MB），审核通过后会在作品页提供下载。</span>
           </label>
 
           ${contests.length ? `
@@ -166,6 +181,41 @@
       const errEl = document.getElementById("s-err");
       const okEl = document.getElementById("s-ok");
       const submit = document.getElementById("s-submit");
+      const coverInput = document.getElementById("s-cover");
+      const fileInput = document.getElementById("s-file");
+      const MAX_FILE = 10 * 1024 * 1024; // 10MB
+
+      // 封面：选中即预览
+      coverInput.addEventListener("change", () => {
+        const f = coverInput.files[0];
+        const nameEl = document.getElementById("s-cover-name");
+        const prev = document.getElementById("s-cover-prev");
+        if (!f) { nameEl.textContent = "未选择图片"; prev.hidden = true; return; }
+        if (!f.type.startsWith("image/")) { nameEl.textContent = "请选择图片文件"; coverInput.value = ""; return; }
+        nameEl.textContent = `${f.name}（${(f.size / 1024 / 1024).toFixed(1)}MB）`;
+        if (f.size > MAX_FILE) { nameEl.textContent = "图片超过 10MB，请压缩后重试"; coverInput.value = ""; prev.hidden = true; return; }
+        const reader = new FileReader();
+        reader.onload = () => { prev.src = reader.result; prev.hidden = false; };
+        reader.readAsDataURL(f);
+      });
+      fileInput.addEventListener("change", () => {
+        const f = fileInput.files[0];
+        const nameEl = document.getElementById("s-file-name");
+        if (!f) { nameEl.textContent = "未选择附件"; return; }
+        nameEl.textContent = f.size > MAX_FILE
+          ? "附件超过 10MB，请压缩后重试"
+          : `${f.name}（${(f.size / 1024 / 1024).toFixed(1)}MB）`;
+      });
+
+      // 上传单个文件到 Supabase Storage，返回公开 URL
+      async function uploadOne(file) {
+        if (!file) return "";
+        if (file.size > MAX_FILE) throw new Error("单个文件不能超过 10MB");
+        const uid = (SB.user() || {}).id || "anon";
+        const safe = String(file.name || "file").replace(/[\\/:*?"<>|#%&{}$!'@+`=]/g, "_").slice(0, 60) || "file";
+        const path = `submissions/${uid}/${Date.now()}_${safe}`;
+        return SB.uploadFile(path, file);
+      }
 
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -174,7 +224,6 @@
         const title = document.getElementById("s-title").value.trim();
         const nickname = document.getElementById("s-nick").value.trim();
         const body = document.getElementById("s-body").value.trim();
-        const cover = document.getElementById("s-cover").value.trim();
         const types = [...document.querySelectorAll("#s-types .s-opt.on")].map((el) => el.dataset.v);
         const contestsEl = document.getElementById("s-contests");
         const contests = contestsEl ? [...contestsEl.querySelectorAll(".s-opt.on")].map((el) => el.dataset.v) : [];
@@ -183,12 +232,23 @@
         if (!types.length) return fail("请至少选择一个投稿类型");
         if (!body) return fail("请填写正文内容");
 
+        const coverFile = coverInput.files[0];
+        const attachFile = fileInput.files[0];
+        if (coverFile && !coverFile.type.startsWith("image/")) return fail("封面必须为图片文件");
+        if ((coverFile || attachFile) && [...(coverFile ? [coverFile] : []), ...(attachFile ? [attachFile] : [])].some((f) => f.size > MAX_FILE)) {
+          return fail("单个文件不能超过 10MB");
+        }
+
         submit.disabled = true;
-        submit.textContent = "提交中…";
+        submit.textContent = "上传中…";
         try {
+          let cover = "", attachment = null;
+          if (coverFile) { submit.textContent = "上传封面…"; cover = await uploadOne(coverFile); }
+          if (attachFile) { submit.textContent = "上传附件…"; attachment = { url: await uploadOne(attachFile), name: attachFile.name }; }
+          submit.textContent = "提交中…";
           await callFn(FUNC_URL, {
             method: "POST",
-            body: JSON.stringify({ title, nickname, types, body, cover, contests }),
+            body: JSON.stringify({ title, nickname, types, body, cover, attachment, contests }),
           });
           root.innerHTML = `
             <div class="submit-done">

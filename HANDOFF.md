@@ -5,6 +5,16 @@
 
 ## 当前状态
 
+✅ **进程 #17 投稿支持附件 + 封面本地上传**：投稿页封面由 URL 直链改为**本地图片上传**（≤10MB、即时预览），并新增 **1 个任意附件**（≤10MB）。文件通过 Supabase Storage（bucket `uploads`）上传，公开 URL 以 `external` 形式写入 Notion 投稿箱「附件」列；审核列表显示附件链接；审核通过后 Worker 转录附件到作品库「附件」列；文章详情页显示「📎 下载附件」。正文仍为纯文本。提交 `fc3xxxx` 已推送。
+
+> ⚠️ **进程 #17 人工步骤（必做）**：
+> 1. **Notion 投稿箱加「附件」列**（Files & media 类型）——否则投稿会提示「附件未保存（投稿箱缺少"附件"列）」；
+> 2. **Notion 作品库加「附件」列**（Files & media 类型）——否则附件不会转录到已发布作品；
+> 3. **Supabase Storage 建 bucket `uploads`**（Public）+ RLS 策略：`storage.objects` 的 SELECT 对所有人（bucket_id='uploads'）、INSERT 仅登录用户（`bucket_id='uploads' AND auth.role()='authenticated'`）；
+> 4. **部署 `submit-work` Edge Function**（上轮遗留）：Dashboard → Edge Functions → `submission-review` → 复制 Secrets → 新建 `submit-work` 粘贴 `scripts/submit-work.ts` → Deploy。
+>
+> 以上 4 步完成前：投稿页提交仍会失败或附件不生效。
+
 ✅ **进程 #16 投稿改为"仅注册用户"**：新增站内投稿页 `site/submit.html`（导航+关于页入口，登录后填写标题/类型/正文/封面/竞赛）与 Supabase Edge Function `scripts/submit-work.ts`（`withSupabase` 服务端校验登录 JWT，未登录 401，写入 Notion 投稿箱=待审核，审核/发布闭环不变）。外部 Notion 表单链接已从 about.html 移除。Notion 写入 payload 已实测通过（建页+归档自检）。提交 `25f2da8` 已推送（`621e1a3..25f2da8`，走 20.205.243.166 可达；git push 首轮 4 旧 IP 均 Connection reset，扩大 IP 池后 DNS 默认亚洲 IP 一次成功）。
 
 ✅ **进程 #15 修复内容同步 Bug（网站与 Notion 长期不一致）**：根因是 GitHub Actions 的 `schedule` 不可靠（实测近 48 次运行仅 7 次 schedule，间隔 1.5~6 小时；且仓库闲置 60 天会停摆）。已改为 **Cloudflare Worker 每 5 分钟对比 Notion 与仓库 main 分支数据指纹，内容变化时 `repository_dispatch` 触发新增的 `sync-notion.yml` 重建静态数据并提交回 main**（push 自然触发 Pages 部署）。同时本地重新生成数据，把 Notion 当前最新内容（新增《文明四季年历》作品页、站点简介与竞赛更新）同步进 main/线上。提交 `3df8f04` 已推送（`65c6e18..3df8f04`，140.82.114.4 可达）。Worker 已 `wrangler deploy`（含 GH_REPO 变量 + GH_TOKEN 密钥）。
@@ -12,6 +22,15 @@
 > ⚠️ **进程 #16 遗留人工步骤（必做）**：`submit-work` Edge Function 尚未部署（无 Supabase CLI token）。请在 Supabase Dashboard → Edge Functions → `submission-review` → 复制其 Secrets（NOTION_TOKEN / DB_SUBMISSIONS 已有），新建 `submit-work` 粘贴 `scripts/submit-work.ts` 内容并 Deploy。部署后站内投稿才可用（未部署时 submit.html 提交会报"投稿服务未配置"）。
 
 ## 已完成的工作
+
+### 本轮（自动化 AI 进程 #17）工作
+| 项 | 内容 | 结果 |
+|---|---|---|
+| 需求澄清 | 用户要求"文本可能带附件，图片上传改本地上传"；确认：附件=任意文件、封面即图片本地上传、1 封面+1 附件各 ≤10MB、正文保持纯文本 | ✅ AskUserQuestion |
+| **O17 本地上传+附件** | ① `supabase.js` 新增 `uploadFile`/`publicUrl`（Storage REST 直传，401 自动续期重试）；② `submit.html` 封面改 `<input type=file>` 本地预览、新增附件选择，提交前先传 Storage 再投稿；③ `submit-work.ts` 接收 `attachment{url,name}` 写入投稿箱「附件」列（400 缺列降级重试+warning）；④ `submission-review.ts` mapRow + `admin-submissions.html` 审核列表显示附件链接；⑤ Worker `createWorkPage` 转录附件到作品库（缺列容错）；⑥ `gen-site-data.mjs` 输出 `attachment` 到 works.json；⑦ `article.js` 文章详情页「📎 下载附件」 | ✅ 代码完成 |
+| 校验 | 5 个 JS/TS 文件 `node --check` 全过；submit.html/admin-submissions.html 内联 JS 4/4 语法 OK | ✅ |
+| Notion payload 实测 | `_tmp/verify_submit_attachment.mjs`：投稿箱/作品库当前**均无「附件」列**；带附件创建真实触发 400 → 降级重试 200 → 归档 200（与 Edge Function 逻辑一致） | ✅ 不留脏数据 |
+| 部署 | ⚠️ 需人工：投稿箱/作品库加「附件」列（Notion）、建 Storage bucket `uploads`+RLS、部署 submit-work | ⏳ 见当前状态 |
 
 ### 本轮（自动化 AI 进程 #16）工作
 | 项 | 内容 | 结果 |

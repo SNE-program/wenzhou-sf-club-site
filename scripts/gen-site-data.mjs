@@ -55,6 +55,15 @@ function propCover(p) {
   return f.type === "external" ? f.external.url : f.file ? f.file.url : null;
 }
 
+/** 附件：取 files 第一个元素，返回 {name, url}；无有效 http(s) 链接返回 null */
+function propAttachment(p) {
+  if (!p || p.type !== "files" || !p.files || !p.files.length) return null;
+  const f = p.files[0];
+  const url = f.type === "external" ? (f.external || {}).url : f.file ? (f.file || {}).url : "";
+  if (!url || !/^https?:\/\//i.test(url)) return null;
+  return { name: f.name || "", url };
+}
+
 function mapActivity(row) {
   const p = row.properties || {};
   return {
@@ -80,6 +89,7 @@ function mapWork(row) {
     summary: propText(p["简介"]),
     body: propText(p["正文"]),
     cover: propCover(p["封面"]),
+    attachment: propAttachment(p["附件"]),
   };
 }
 

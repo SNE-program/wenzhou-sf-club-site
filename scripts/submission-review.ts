@@ -58,6 +58,7 @@ const S = {
   cover: "\u5c01\u9762", // 封面
   email: "\u90ae\u7bb1", // 邮箱
   contests: "\u6240\u5c5e\u7ade\u8d5b", // 所属竞赛
+  attachment: "\u9644\u4ef6", // 附件
   created: "\u63d0\u4ea4\u65f6\u95f4", // 提交时间
   rejectReason: "\u62d2\u7edd\u539f\u56e0", // 拒绝原因
   notLogin: "\u672a\u767b\u5f55", // 未登录
@@ -100,6 +101,13 @@ function mapRow(row) {
         ? p[S.cover].files[0].external.url
         : (p[S.cover].files[0].file || {}).url || ""
       : "";
+  const attFile = p[S.attachment] && p[S.attachment].files && p[S.attachment].files[0] ? p[S.attachment].files[0] : null;
+  const attachment = attFile
+    ? {
+        name: attFile.name || "",
+        url: attFile.type === "external" ? attFile.external.url : (attFile.file || {}).url || "",
+      }
+    : null;
   return {
     id: row.id,
     title: get(S.title),
@@ -107,6 +115,7 @@ function mapRow(row) {
     types: get(S.types) || [],
     body: get(S.body),
     cover,
+    attachment,
     email: get(S.email),
     contests: get(S.contests) || [],
     created: get(S.created),

@@ -96,7 +96,11 @@
       <div class="card-cover detail-cover" style="${coverStyle(article, article.title)}">${initialOf(article.title)}</div>
       <h1 class="detail-title">${esc(article.title)}</h1>
       <div class="detail-meta">${metaBits.join(" · ")}</div>
-      <div class="detail-body">${bodyHTML(article)}</div>`;
+      <div class="detail-body">${bodyHTML(article)}</div>
+      ${article.attachment && article.attachment.url ? `
+      <div class="detail-attach" style="margin-top:1.2rem">
+        <a class="btn ghost" href="${esc(article.attachment.url)}" target="_blank" rel="noopener">📎 ${esc(article.attachment.name || "下载附件")}</a>
+      </div>` : ""}`;
 
     const back = document.getElementById("back-link");
     back.href = backTarget();

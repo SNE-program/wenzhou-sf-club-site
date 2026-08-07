@@ -109,6 +109,7 @@
                     ${s.email ? `<span class="c-time">✉ ${esc(s.email)}</span>` : ""}
                   </div>
                   <div class="submit-body-text">${esc(preview(s.body))}</div>
+                  ${s.attachment && s.attachment.url ? `<div class="submit-meta"><a class="c-time" href="${esc(s.attachment.url)}" target="_blank" rel="noopener">📎 附件：${esc(s.attachment.name || "下载")}</a></div>` : ""}
                 </div>
                 <div class="c-actions">
                   <button class="btn audit-pass" type="button">通过</button>
