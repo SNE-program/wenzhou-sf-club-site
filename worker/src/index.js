@@ -289,6 +289,16 @@ async function querySubmitDB(status) {
   return (await res.json()).results || [];
 }
 
+/** 把长文本按 ≤2000 字符切成多个 Notion rich_text 块（空串返回单空块） */
+function chunkText(s, size = 2000) {
+  const str = String(s ?? "");
+  const chunks = [];
+  for (let i = 0; i < str.length; i += size) {
+    chunks.push({ text: { content: str.slice(i, i + size) } });
+  }
+  return chunks.length ? chunks : [{ text: { content: "" } }];
+}
+
 /** 在正式作品库创建作品条目，返回新条目 id */
 async function createWorkPage(sub) {
   const cats = ["短篇小说", "世界观设定", "科普随笔"];
@@ -300,7 +310,9 @@ async function createWorkPage(sub) {
     "标题": { title: [{ text: { content: sub.title } }] },
     "作者": { rich_text: [{ text: { content: sub.author || "匿名" } }] },
     "分类": { select: { name: cat } },
-    "简介": { rich_text: [{ text: { content: sub.body || "" } }] },
+    // 简介 = 短摘要（列表卡片展示）；正文 = 完整内容按 2000 分块（Notion rich_text 单块上限）
+    "简介": { rich_text: [{ text: { content: String(sub.body || "").replace(/\s+/g, " ").trim().slice(0, 200) || sub.title } }] },
+    "正文": { rich_text: chunkText(sub.body || "") },
   };
   if (tags.length) properties["标签"] = { multi_select: [...new Set(tags)].map((n) => ({ name: n })) };
   // 封面仅转录外部链接（避免 Notion 临时文件链接过期裂图）
@@ -329,6 +341,21 @@ async function createWorkPage(sub) {
     // 作品库缺「附件」列时：去掉附件字段重试，保证作品创建成功（附件下次在投稿箱仍可查看）
     if (res.status === 400 && properties["附件"]) {
       delete properties["附件"];
+      const retry = await fetch("https://api.notion.com/v1/pages", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${NOTION_TOKEN}`,
+          "Notion-Version": NOTION_VERSION,
+          "Content-Type": "application/json",
+        },
+        body: mkBody(),
+      });
+      if (retry.ok) return (await retry.json()).id;
+    }
+    // 作品库缺「正文」列时：正文并入「简介」（全文，兼容旧结构）
+    if (res.status === 400 && properties["正文"]) {
+      delete properties["正文"];
+      properties["简介"] = { rich_text: chunkText(String(sub.body || "")) };
       const retry = await fetch("https://api.notion.com/v1/pages", {
         method: "POST",
         headers: {

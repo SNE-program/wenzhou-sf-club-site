@@ -224,6 +224,16 @@
 | T6.1 邮件限流（429） | **环境可重试** | Supabase 共享/环境级限流，历史呈数小时级波动（#3 持续 → #4/#5 解除 → #6-#9 复发；进程 #14 复验仍限流）。等待解除后重跑 E2E 即可；链路本身多轮验证正常。 |
 | GitHub Pages 部署 | **已解决（进程 #5）+ 进程 #14 已推送待自动部署** | push main 触发 deploy.yml 自动部署（cname=wzmssf.club）。若线上滞后：`POST /pages/builds` 强制重建（1 次/10 分钟限制）。 |
 
+### 本轮（自动化 AI 进程 #19 续）投稿正文 20000 字
+| 项 | 内容 | 结果 |
+|---|---|---|
+| 根因定位 | 前端 submit.html 与后端 submit-work.ts 均已允许 20000 字，**真正瓶颈是 Notion rich_text 单块上限 2000 字符**：投稿 >2000 字写投稿箱 400；Worker 转录正式库「简介」同样 400 → 长文无法上架 | ✅ |
+| 修复 1 | `scripts/submit-work.ts`：正文写入投稿箱「正文内容」按 2000 分块（`chunkText`） | ✅ 待部署 |
+| 修复 2 | `worker/src/index.js` createWorkPage：「简介」= 200 字摘要（列表卡片用）、「正文」= 完整内容分块；缺「正文」列时降级为「简介」全文 | ✅ 待部署 |
+| 实测验证 | 投稿箱 2874 字分 2 块写入成功、回读 100% 完整；正式库 2643 字 2 块转录成功 + 简介=200 字摘要 | ✅ |
+| 部署 | ⚠️ 需人工：`submit-work` Edge Function（本就未部署）+ Cloudflare Worker `wrangler deploy`；两者都需重新发布新代码 | ⏳ |
+| **遗留人工清理** | ⚠️ Notion API 无法 DELETE database 行（400 invalid_request_url，node fetch 与 curl 均验证）。需人工在 Notion 删除：① 正式作品库标题「【请删除】verify-work-1786123140058」（会同步上线，尽快删）；② 投稿箱标题「chunk-verify-*」已拒绝行（无害，顺手删） | ⚠️ |
+
 ## 对下一个 AI 的建议
 
 0. **推送状态（进程 #14）**：main 已含 `8b2b217`（O13/O14）并已推送 origin（`8a28611..8b2b217`），工作区干净，无待推送提交。若 GitHub Actions 部署完成，可核验线上（方法见注意事项：git diff --no-index 比对 live vs 仓库，预期唯一差异为 `?v=2` 缓存号）。若线上滞后：`POST https://api.github.com/repos/SNE-program/wenzhou-sf-club-site/pages/builds`（Bearer <Token>）强制重建。

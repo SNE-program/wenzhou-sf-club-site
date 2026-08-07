@@ -58,13 +58,24 @@ const S = {
   pending: "\u5f85\u5ba1\u6838", // 待审核
 };
 
+/** 把长文本按 ≤2000 字符切成多个 Notion rich_text 块（空串返回单空块） */
+function chunkText(s, size = 2000) {
+  const str = String(s ?? "");
+  const chunks = [];
+  for (let i = 0; i < str.length; i += size) {
+    chunks.push({ text: { content: str.slice(i, i + size) } });
+  }
+  return chunks.length ? chunks : [{ text: { content: "" } }];
+}
+
 /** 写入 Notion 投稿箱（审核状态=待审核） */
 async function createSubmitPage(data) {
   const properties = {
     [S.title]: { title: [{ text: { content: data.title } }] },
     [S.author]: { rich_text: [{ text: { content: data.author } }] },
     [S.types]: { multi_select: data.types.map((n) => ({ name: n })) },
-    [S.body]: { rich_text: [{ text: { content: data.body } }] },
+    // 正文可能超过 20000 字，按 2000 字符分块写入（Notion rich_text 单块上限 2000）
+    [S.body]: { rich_text: chunkText(data.body) },
     [S.email]: { rich_text: [{ text: { content: data.email } }] },
     [S.status]: { status: { name: S.pending } },
   };
