@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -162,9 +162,9 @@
               <input type="file" id="s-file" hidden>
               <span class="s-fname" id="s-file-name">未选择附件</span>
             </div>
-            <button class="btn ghost" type="button" id="s-to-md" hidden>转换为 Markdown</button>
+            <button class="btn ghost" type="button" id="s-to-md">转换为 Markdown</button>
             <span class="s-hint" id="s-file-hint">可选。可附 1 个任意文件（Word / PDF / 压缩包 / 图片等，≤10MB），审核通过后会在作品页提供下载。</span>
-            <span class="s-hint" id="s-to-md-hint" hidden></span>
+            <span class="s-hint" id="s-to-md-hint" hidden>仅 Word（.docx / .docm）附件可转换；选择后点上方按钮即可把正文识别并写入「正文内容」。</span>
           </div>
 
           ${contests.length ? `
@@ -214,20 +214,18 @@
       fileInput.addEventListener("change", () => {
         const f = fileInput.files[0];
         const nameEl = document.getElementById("s-file-name");
-        const toMd = document.getElementById("s-to-md");
         const toMdHint = document.getElementById("s-to-md-hint");
-        if (toMd) toMd.hidden = true;
-        if (toMdHint) toMdHint.hidden = true;
         if (!f) { nameEl.textContent = "未选择附件"; return; }
         if (f.size > MAX_FILE) {
           nameEl.textContent = "附件超过 10MB，请压缩后重试";
           return;
         }
         nameEl.textContent = `${f.name}（${(f.size / 1024 / 1024).toFixed(1)}MB）`;
-        // 仅 Word 附件（.docx / .docm）显示「转换为 Markdown」
-        if (/\.docx?$/i.test(f.name)) {
-          if (toMd) toMd.hidden = false;
-          if (toMdHint) { toMdHint.textContent = "选择此附件后，可一键把 Word 内容识别并写入上方「正文内容」。"; toMdHint.hidden = false; }
+        if (toMdHint) {
+          toMdHint.hidden = false;
+          toMdHint.textContent = /\.(docx|docm)$/i.test(f.name)
+            ? "已选择 Word 附件，可点上方「转换为 Markdown」识别正文。"
+            : "当前附件不是 Word（.docx / .docm），无法一键转换，可直接在正文区粘贴内容。";
         }
       });
 
@@ -237,8 +235,15 @@
         toMd.addEventListener("click", async () => {
           const f = fileInput.files[0];
           const toMdHint = document.getElementById("s-to-md-hint");
-          if (!f) return;
-          if (!/\.docx?$/i.test(f.name)) { if (toMdHint) toMdHint.textContent = "仅支持 .docx / .docm 文件"; return; }
+          if (toMdHint) { toMdHint.hidden = false; }
+          if (!f) {
+            if (toMdHint) toMdHint.textContent = "请先在「附件」中选择一个 Word（.docx / .docm）文件";
+            return;
+          }
+          if (!/\.(docx|docm)$/i.test(f.name)) {
+            if (toMdHint) toMdHint.textContent = "仅支持 .docx / .docm 文件，请重新选择附件";
+            return;
+          }
           if (typeof window.mammoth !== "object" || typeof window.TurndownService !== "function") {
             if (toMdHint) toMdHint.textContent = "转换组件加载失败，请刷新页面重试";
             return;
