@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -360,7 +360,7 @@
       if (!user) {
         root.innerHTML = `
           <div class="state">
-            <p>投稿需要先注册并登录账号（仅需邮箱验证，不会采集真实姓名）。</p>
+            <p>投稿需要先注册并登录账号（在校学生经学号姓名与名册自动核验，非在校用户由管理员审核）。</p>
             <p style="margin-top:1rem"><button class="btn" id="go-login" type="button">登录 / 注册</button></p>
           </div>`;
         document.getElementById("go-login").addEventListener("click", () => window.openAuthModal("login"));

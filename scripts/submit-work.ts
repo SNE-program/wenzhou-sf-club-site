@@ -135,6 +135,32 @@ function clean(str, max) {
   return String(str ?? "").trim().slice(0, max);
 }
 
+// 投稿类型白名单（对应站规第二十三条，Worker 转录时同分类口径）
+const TYPE_WHITELIST = [
+  "\u77ed\u7bc7\u5c0f\u8bf4", // 短篇小说
+  "\u4e16\u754c\u89c2\u8bbe\u5b9a", // 世界观设定
+  "\u79d1\u666e\u968f\u7b14", // 科普随笔
+  "\u5176\u4ed6", // 其他
+];
+
+// 单文件大小上限 10MB（对应站规第二十三条）
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+/**
+ * HEAD 请求读取远程文件大小（字节）。读取失败或无法判断时返回 0（跳过校验，
+ * 不误伤——前端上传到 Storage 前已做大小校验，此处仅作服务端兜底）。
+ */
+async function headFileSize(url) {
+  try {
+    const res = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return 0;
+    const len = Number(res.headers.get("content-length") || 0);
+    return Number.isFinite(len) && len > 0 ? len : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export default {
   fetch: withSupabase({ auth: "user" }, async (req) => {
     // 环境变量缺失时优雅降级
@@ -165,6 +191,17 @@ export default {
     const types = Array.isArray(body.types)
       ? [...new Set(body.types.map((t) => clean(t, 20)).filter(Boolean))].slice(0, 5)
       : [];
+    // 服务端校验：投稿类型至少选择一项，且仅在站规白名单内
+    if (!types.length) {
+      return Response.json(
+        { error: "\u8bf7\u81f3\u5c11\u9009\u62e9\u4e00\u4e2a\u6295\u7a3f\u7c7b\u578b" },
+        { status: 400 }
+      );
+    }
+    const invalidTypes = types.filter((t) => !TYPE_WHITELIST.includes(t));
+    if (invalidTypes.length) {
+      return Response.json({ error: "\u6295\u7a3f\u7c7b\u578b\u65e0\u6548" }, { status: 400 });
+    }
     const contests = Array.isArray(body.contests)
       ? [...new Set(body.contests.map((t) => clean(t, 50)).filter(Boolean))].slice(0, 3)
       : [];
@@ -177,6 +214,19 @@ export default {
       if (aurl && /^https?:\/\//i.test(aurl)) {
         attachment = { url: aurl, name: clean(body.attachment.name, 120) || "attachment" };
       }
+    }
+    // 服务端兜底：封面/附件 HEAD 校验大小（≤10MB）
+    if (cover && (await headFileSize(cover)) > MAX_FILE_BYTES) {
+      return Response.json(
+        { error: "\u5c01\u9762\u6587\u4ef6\u4e0d\u80fd\u8d85\u8fc7 10MB" },
+        { status: 400 }
+      );
+    }
+    if (attachment && (await headFileSize(attachment.url)) > MAX_FILE_BYTES) {
+      return Response.json(
+        { error: "\u9644\u4ef6\u6587\u4ef6\u4e0d\u80fd\u8d85\u8fc7 10MB" },
+        { status: 400 }
+      );
     }
 
     // 获取登录用户信息（笔名默认用注册昵称）
@@ -195,9 +245,22 @@ export default {
     }
     const { data: me } = await supabase
       .from("profiles")
-      .select("nickname")
+      .select("nickname, banned, muted")
       .eq("user_id", user.id)
       .maybeSingle();
+    // 服务端校验：被封禁 / 被禁言用户不可投稿（与站规违规处理一致）
+    if (me && me.banned) {
+      return Response.json(
+        { error: "\u8be5\u8d26\u53f7\u5df2\u88ab\u5c01\u7981\uff0c\u65e0\u6cd5\u6295\u7a3f" },
+        { status: 403 }
+      );
+    }
+    if (me && me.muted) {
+      return Response.json(
+        { error: "\u4f60\u5df2\u88ab\u7981\u8a00\uff0c\u65e0\u6cd5\u6295\u7a3f" },
+        { status: 403 }
+      );
+    }
     const nickname = clean(body.nickname, 20) || (me && me.nickname) || (user.user_metadata && user.user_metadata.nickname) || "\u661f\u5c18";
 
     try {
