@@ -91,7 +91,9 @@
                 <label class="c-field">排序<input type="number" name="sort_order" value="${v("sort_order") ?? 0}" step="1"></label>
               </div>
               <label class="c-field">主题<textarea name="topic" rows="2">${esc(v("topic"))}</textarea></label>
-              <label class="c-field">参赛规则（告示内容）<textarea name="rules" id="c-rules" rows="6">${esc(v("rules"))}</textarea></label>
+              <label class="c-field">参赛规则（告示内容）<textarea name="rules" id="c-rules" rows="6">${esc(v("rules"))}</textarea>
+                <input type="hidden" name="rules_html" id="c-rules-html" value="${esc(v("rules_html"))}">
+              </label>
               <label class="c-field">奖项设置<textarea name="awards" rows="2">${esc(v("awards"))}</textarea></label>
               <label class="c-field">获奖名单<textarea name="winners" rows="2">${esc(v("winners"))}</textarea></label>
               <div class="c-field">
@@ -205,14 +207,25 @@
               const md = new window.TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" }).turndown(html);
               if (!md.trim()) throw new Error("未识别到文字内容");
               const rulesEl = document.getElementById("c-rules");
+              const rulesHtmlEl = document.getElementById("c-rules-html");
               rulesEl.value = md.trim() + "\n";
-              hintEl.textContent = `已把《${f.name}》识别为 Markdown 写入「参赛规则」，请检查后保存。`;
+              if (rulesHtmlEl) rulesHtmlEl.value = html; // 保留 Word 原始排版（表格/对齐/颜色）
+              hintEl.textContent = `已导入《${f.name}》：Markdown 已写入「参赛规则」，并保留了 Word 原始排版（表格、对齐、字体颜色）。`;
             } catch (err) {
               hintEl.textContent = "转换失败：" + (err.message || "未知错误") + "。也可直接复制文本粘贴到「参赛规则」。";
             } finally {
               toMd.disabled = false;
               toMd.textContent = "转换为 Markdown";
             }
+          });
+        }
+
+        // 手动编辑「参赛规则」后清除 Word 排版版本（以 Markdown 排版为准，避免展示过期 HTML）
+        const rulesText = document.getElementById("c-rules");
+        const rulesHtmlEl = document.getElementById("c-rules-html");
+        if (rulesText && rulesHtmlEl) {
+          rulesText.addEventListener("input", () => {
+            if (rulesHtmlEl.value) rulesHtmlEl.value = "";
           });
         }
 
@@ -227,6 +240,7 @@
             sort_order: Number(fd.get("sort_order")) || 0,
             topic: fd.get("topic").trim(),
             rules: fd.get("rules").trim(),
+            rules_html: fd.get("rules_html") || "",
             awards: fd.get("awards").trim(),
             winners: fd.get("winners").trim(),
           };

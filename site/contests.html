@@ -32,6 +32,10 @@
     .contest-sec .md li { margin-bottom: 0.2rem; }
     .contest-sec .md a { color: var(--accent); }
     .contest-sec .md strong { color: var(--text); }
+    /* Word 表格（mammoth 原始 HTML） */
+    .contest-sec .md table { border-collapse: collapse; margin: 0.7rem 0; width: 100%; }
+    .contest-sec .md th, .contest-sec .md td { border: 1px solid var(--border); padding: 0.45rem 0.65rem; vertical-align: top; }
+    .contest-sec .md th { background: var(--surface-hover); font-weight: 600; }
   </style>
 </head>
 <body>
@@ -119,7 +123,7 @@
             ${c.deadline ? `<span>⏰ 投稿截止：${esc(c.deadline)}</span>` : ""}
           </div>
           ${c.topic ? `<div class="contest-sec"><h3>主题</h3><p>${esc(c.topic)}</p></div>` : ""}
-          ${c.rules ? `<div class="contest-sec"><h3>参赛规则</h3><div class="md">${renderMarkdown(c.rules)}</div></div>` : ""}
+          ${c.rules || c.rules_html ? `<div class="contest-sec"><h3>参赛规则</h3>${c.rules_html && String(c.rules_html).trim() ? `<div class="md">${sanitizeHtml(c.rules_html)}</div>` : `<div class="md">${renderMarkdown(c.rules)}</div>`}</div>` : ""}
           ${c.attachment_url ? `<p style="margin-top:1rem"><a class="btn ghost" href="${esc(c.attachment_url)}" target="_blank" rel="noopener">下载告示附件${c.attachment_name ? `（${esc(c.attachment_name)}）` : ""}</a></p>` : ""}
           ${c.awards ? `<div class="contest-sec"><h3>奖项设置</h3><p>${esc(c.awards)}</p></div>` : ""}
           ${c.winners ? `<div class="contest-sec"><h3>获奖名单</h3><p>${esc(c.winners)}</p></div>` : ""}

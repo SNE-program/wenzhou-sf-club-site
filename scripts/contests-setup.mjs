@@ -40,6 +40,8 @@ CREATE INDEX IF NOT EXISTS idx_contests_sort ON public.contests(sort_order);
 ALTER TABLE public.contests ADD COLUMN IF NOT EXISTS notice text NOT NULL DEFAULT '';
 ALTER TABLE public.contests ADD COLUMN IF NOT EXISTS attachment_url text NOT NULL DEFAULT '';
 ALTER TABLE public.contests ADD COLUMN IF NOT EXISTS attachment_name text NOT NULL DEFAULT '';
+-- Word 原始排版 HTML（表格/对齐/字体颜色），公开页优先渲染
+ALTER TABLE public.contests ADD COLUMN IF NOT EXISTS rules_html text NOT NULL DEFAULT '';
 
 ALTER TABLE public.contests ENABLE ROW LEVEL SECURITY;
 
