@@ -110,15 +110,12 @@
       area.innerHTML = `
         <span class="auth-user" title="${esc(user.email || "")}">${esc(nick)}${profile && profile.warned ? `<span class="auth-warn" title="你已被管理员警告，请注意遵守站规">⚠</span>` : ""}${profile && profile.real_name ? `<span class="c-real">${esc(profile.real_name)}</span>` : ""}</span>
         ${tag}
-        ${!profile.real_name ? `<button class="auth-btn" type="button" id="btn-verify" title="在校学生可凭学号姓名通过名册自动核验">实名认证</button>` : ""}
         <button class="auth-btn" type="button" id="btn-rename" title="修改昵称（7 天内仅可修改一次）">改名</button>
         <button class="auth-btn" type="button" id="btn-logout">退出</button>`;
       document.getElementById("btn-logout").addEventListener("click", async () => {
         await SB.signOut();
         await render();
       });
-      const verifyBtn = document.getElementById("btn-verify");
-      if (verifyBtn) verifyBtn.addEventListener("click", () => openVerifyModal());
       const renameBtn = document.getElementById("btn-rename");
       if (renameBtn) renameBtn.addEventListener("click", () => openRenameModal());
 
@@ -377,72 +374,6 @@
       modalEl.remove();
       modalEl = null;
     }
-  }
-
-  // 实名认证补录 / 修正重试弹窗：在校学生凭学号+姓名经名册自动核验（RPC verify_student）
-  function openVerifyModal() {
-    if (modalEl) modalEl.remove();
-    modalEl = document.createElement("div");
-    modalEl.className = "modal-mask";
-    modalEl.innerHTML = `
-      <div class="modal" role="dialog" aria-modal="true">
-        <button class="modal-close" type="button" aria-label="关闭">✕</button>
-        <div class="modal-tabs"><button type="button" class="tab active">实名认证</button></div>
-        <form class="modal-form" id="verify-form">
-          <p class="form-note">在校学生填写学号与姓名，系统将自动与在校名册核验：匹配即通过审核并展示实名（公开区仍以笔名为主），学号不公开。非在校用户无需认证，可联系管理员人工审核。</p>
-          <label>学号<input type="text" id="v-sid" required maxlength="20" placeholder="学号，如 27xxxx08" autocomplete="off"></label>
-          <label>姓名<input type="text" id="v-real" required maxlength="20" placeholder="与在校名册一致的姓名" autocomplete="off"></label>
-          <p class="form-err" id="v-err" hidden></p>
-          <button class="btn" type="submit" id="v-submit">提交认证</button>
-        </form>
-      </div>`;
-    document.body.appendChild(modalEl);
-    if (modalEl.querySelector(".modal-close")) {
-      modalEl.querySelector(".modal-close").addEventListener("click", closeModal);
-    }
-    modalEl.addEventListener("click", (e) => {
-      if (e.target === modalEl) closeModal();
-    });
-    modalEl.querySelector("#verify-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const sid = document.getElementById("v-sid").value.trim();
-      const real = document.getElementById("v-real").value.trim();
-      const errEl = document.getElementById("v-err");
-      const submit = document.getElementById("v-submit");
-      errEl.hidden = true;
-      if (!sid || !real) {
-        errEl.textContent = "请同时填写学号与姓名";
-        errEl.hidden = false;
-        return;
-      }
-      if (!/^\d+$/.test(sid)) {
-        errEl.textContent = "学号应为数字";
-        errEl.hidden = false;
-        return;
-      }
-      submit.disabled = true;
-      submit.textContent = "认证中…";
-      try {
-        const r = await SB.rpc("verify_student", { p_student_id: sid, p_real_name: real });
-        closeModal();
-        if (r && r.ok) {
-          showToast(`实名认证通过！你好，${r.real_name || ""}`, "ok");
-        } else {
-          const reason = r && r.reason;
-          const msg =
-            reason === "claimed"
-              ? "该学号已被其他账号绑定，请联系管理员核实"
-              : "未在在校名册中核验通过，请核对学号与姓名；校外用户可联系管理员人工审核";
-          showToast(msg, "error");
-        }
-        await render();
-      } catch (err) {
-        submit.disabled = false;
-        submit.textContent = "提交认证";
-        errEl.textContent = friendlyAuthError(err.message) || String(err.message || "操作失败，请重试");
-        errEl.hidden = false;
-      }
-    });
   }
 
   // 修改昵称弹窗：全站唯一（不区分大小写），7 天内仅可修改一次（RPC change_nickname 服务端校验）
