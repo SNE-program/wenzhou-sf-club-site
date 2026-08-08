@@ -1012,6 +1012,55 @@ a.card:hover { text-decoration: none; }
   text-align: center;
   line-height: 1.7;
 }
+/* 注册前站规同意框（醒目提示，强制勾选） */
+.rules-consent {
+  margin: 0.9rem 0 0.6rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(232, 177, 76, 0.45);
+  border-left: 4px solid var(--accent);
+  border-radius: 11px;
+  background: linear-gradient(135deg, rgba(232, 177, 76, 0.1), rgba(232, 177, 76, 0.04));
+}
+.rules-consent-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 0.4rem;
+}
+.rules-consent-body {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.75;
+  margin-bottom: 0.6rem;
+}
+.rules-consent-body a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.rules-consent-body a:hover { opacity: 0.85; }
+.rules-consent-check {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin-bottom: 0 !important;
+  font-size: 0.82rem !important;
+  color: var(--text) !important;
+  cursor: pointer;
+}
+.rules-consent-check input {
+  width: 15px;
+  height: 15px;
+  margin: 0.15rem 0 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+.rules-consent-check:hover { color: var(--accent) !important; }
 .form-link {
   margin-top: 0.8rem;
   text-align: center;

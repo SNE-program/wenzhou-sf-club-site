@@ -139,6 +139,14 @@
           <label>密码<span class="pass-wrap"><input type="password" id="f-pass" required placeholder="至少 6 位" autocomplete="new-password"><button type="button" class="pass-toggle" data-target="f-pass" aria-pressed="false" aria-label="显示密码" title="显示/隐藏密码"><svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></span></label>
           <label>确认密码<span class="only-signup">（再次输入）</span><span class="pass-wrap only-signup"><input type="password" id="f-pass2" placeholder="再次输入密码" autocomplete="new-password"><button type="button" class="pass-toggle" data-target="f-pass2" aria-pressed="false" aria-label="显示密码" title="显示/隐藏密码"><svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></span></label>
           <p class="form-err" id="f-err" hidden></p>
+          <div class="rules-consent only-signup" id="rules-consent" hidden>
+            <p class="rules-consent-title">注册前请阅读《网站站规》</p>
+            <p class="rules-consent-body">一个邮箱仅可注册一个账号；注册后需完成邮箱验证并等待管理员审核；评论须文明友善，每人每篇限 1 条（≤1200 字）；投稿须为原创或已获授权；作品将按 CC BY-SA 4.0 公开展示。完整条款见<a href="rules.html" target="_blank" rel="noopener">《网站站规》全文</a>。</p>
+            <label class="rules-consent-check">
+              <input type="checkbox" id="f-agree">
+              <span>我已阅读并同意《网站站规》</span>
+            </label>
+          </div>
           <button class="btn" type="submit" id="f-submit">登录</button>
           <div id="auth-reset" hidden>
             <p>忘记密码？输入你的邮箱，我们将发送一封密码重置链接。</p>
@@ -197,6 +205,7 @@
       form.querySelectorAll("label").forEach((l) => {
         l.hidden = l !== emailLabel;
       });
+      document.getElementById("rules-consent").hidden = true;
       document.getElementById("f-submit").hidden = true;
       document.getElementById("f-forgot").hidden = true;
       document.getElementById("f-err").hidden = true;
@@ -256,6 +265,8 @@
         if (isSignup) {
           if (pass.length < 6) throw new Error("密码至少 6 位");
           if (pass !== pass2) throw new Error("两次输入的密码不一致");
+          if (!document.getElementById("f-agree").checked)
+            throw new Error("请先阅读并勾选同意《网站站规》");
           // 封禁邮箱预检（尽力而为；失败时由数据库注册触发器兜底拦截）
           try {
             const emailBlocked = await SB.rpc("check_email_banned", { check_email: email });
