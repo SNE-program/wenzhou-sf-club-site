@@ -2642,3 +2642,19 @@ html.minimal img.s-prev { display: none !important; }
 
 /* 页脚装饰水印 */
 html.minimal .footer::before { display: none; }
+
+/* ============================================
+   移动端导航保障：⚙ 设置按钮始终可见
+   ============================================ */
+@media (max-width: 720px) {
+  .nav-tools { min-width: 0; }
+  .nav-tools .sf-style-select {
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 6.5rem;
+  }
+  .icon-btn#ui-settings { flex-shrink: 0; }
+}
+@media (max-width: 420px) {
+  .nav-tools .sf-style-select { max-width: 5.5rem; }
+}
