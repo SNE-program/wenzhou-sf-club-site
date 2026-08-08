@@ -1,0 +1,66 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>成员 · 温州中学科学及幻想文学社</title>
+  <meta name="description" content="社团成员与部门介绍。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="成员 · 温州中学科学及幻想文学社">
+  <meta property="og:description" content="社团成员与部门介绍。">
+  <meta property="og:image" content="https://sne-program.github.io/wenzhou-sf-club-site/images/og-default.png">
+  <meta property="og:url" content="https://sne-program.github.io/wenzhou-sf-club-site/members.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>成员与部门</h1>
+      <div class="sub">每一个岗位背后，都是热爱科学与幻想的人。</div>
+    </div>
+
+    <div class="grid" id="members">
+      <div class="state"><div class="spinner"></div>正在加载成员……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=8"></script>
+  <script src="js/api.js?v=6"></script>
+  <script src="js/supabase.js?v=8"></script>
+  <script src="js/auth.js?v=15"></script>
+  <script>
+    (async function () {
+      const members = await fetchSection("members");
+      document.querySelector("#members").innerHTML = members.length
+        ? members.map((it) => `
+          <article class="card member">
+            <div class="avatar">${esc(initialOf(it.name))}</div>
+            <div class="info">
+              <h3>${esc(it.name)}</h3>
+              <div class="role">${esc(it.role || "社员")}</div>
+              ${it.bio ? `<div class="bio">${esc(it.bio)}</div>` : ""}
+            </div>
+          </article>`).join("")
+        : `<div class="state">暂无成员信息</div>`;
+    })().catch((e) => {
+      document.querySelector("#members").innerHTML = `<div class="state">成员加载失败，请稍后刷新重试。</div>`;
+      console.error(e);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>写作竞赛 · 温州中学科学及幻想文学社</title>
+  <meta name="description" content="社团写作竞赛：主题、规则、投稿与获奖名单。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="写作竞赛 · 温州中学科学及幻想文学社">
+  <meta property="og:description" content="拿起笔，让想象力远航。">
+  <meta property="og:image" content="https://sne-program.github.io/wenzhou-sf-club-site/images/og-default.png">
+  <meta property="og:url" content="https://sne-program.github.io/wenzhou-sf-club-site/contests.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+  <style>
+    /* 竞赛告示（Word 转 Markdown 渲染）排版 */
+    .contest-sec .md h1, .contest-sec .md h2, .contest-sec .md h3 {
+      font-size: 1.05rem; color: var(--text); margin: 0.9rem 0 0.35rem;
+    }
+    .contest-sec .md p { color: var(--text); margin-bottom: 0.6rem; white-space: normal; }
+    .contest-sec .md ul, .contest-sec .md ol { color: var(--text); padding-left: 1.3rem; margin-bottom: 0.6rem; }
+    .contest-sec .md li { margin-bottom: 0.2rem; }
+    .contest-sec .md a { color: var(--accent); }
+    .contest-sec .md strong { color: var(--text); }
+    /* Word 表格（mammoth 原始 HTML） */
+    .contest-sec .md table { border-collapse: collapse; margin: 0.7rem 0; width: 100%; }
+    .contest-sec .md th, .contest-sec .md td { border: 1px solid var(--border); padding: 0.45rem 0.65rem; vertical-align: top; }
+    .contest-sec .md th { background: var(--surface-hover); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>写作竞赛</h1>
+      <div class="sub">拿起笔，让想象力远航。</div>
+    </div>
+
+    <div id="contests">
+      <div class="state"><div class="spinner"></div>正在加载竞赛……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=8"></script>
+  <script src="js/api.js?v=6"></script>
+  <script src="js/supabase.js?v=8"></script>
+  <script src="js/auth.js?v=15"></script>
+  <!-- 竞赛告示 Markdown 渲染（marked 不可用时降级为段落） -->
+  <script src="js/vendor/marked.min.js"></script>
+  <script src="js/vendor/dompurify.min.js"></script>
+  <script>
+    (async function () {
+      // 投稿走站内投稿页（支持附件上传 + Word 转 Markdown + 自动预选所属竞赛）
+
+      // XSS 过滤：优先 DOMPurify（白名单清洗），保留规则 Word 转出的 inline style（颜色/对齐保真）；不可用时降级为简单剥离
+      function sanitizeHtml(html) {
+        const text = String(html == null ? "" : html);
+        if (!text) return "";
+        try {
+          if (window.DOMPurify && typeof window.DOMPurify.sanitize === "function") {
+            return window.DOMPurify.sanitize(text, {
+              USE_PROFILES: { html: true },
+              ADD_ATTR: ["style"],
+              FORBID_TAGS: ["script", "iframe", "object", "embed", "style", "link", "meta", "form", "input", "button", "textarea", "template", "svg", "math"],
+            });
+            // 注：竞赛规则来自管理员 Word 转换（可信内容），保留 inline style 保真；危险 CSS 由 DOMPurify 清洗
+          }
+        } catch (e) { /* DOMPurify 异常时降级 */ }
+        try {
+          const tpl = document.createElement("template");
+          tpl.innerHTML = text;
+          tpl.content
+            .querySelectorAll("script,iframe,object,embed,style,link,meta,form,input,button,textarea")
+            .forEach((el) => el.remove());
+          tpl.content.querySelectorAll("*").forEach((el) => {
+            for (const a of [...el.attributes]) {
+              const n = a.name.toLowerCase();
+              if (n.startsWith("on") || n === "srcdoc" || (n === "href" && /^\s*javascript:/i.test(a.value))) {
+                el.removeAttribute(a.name);
+              }
+            }
+          });
+          return tpl.innerHTML;
+        } catch (e) {
+          return text.replace(/<[^>]*>/g, "");
+        }
+      }
+
+      // Markdown → HTML（参赛规则/告示内容为管理后台 Word 转出的 Markdown）
+      function renderMarkdown(src) {
+        const md = window.marked && typeof window.marked.parse === "function" ? window.marked.parse : null;
+        const text = String(src == null ? "" : src);
+        if (!md) {
+          return text.split(/\n+/).map((s) => s.trim()).filter(Boolean).map((p) => `<p>${esc(p)}</p>`).join("");
+        }
+        return sanitizeHtml(md(text, { breaks: true, gfm: true }));
+      }
+
+      // 优先读 Supabase（在线管理的内容），失败/为空则降级 Notion/本地数据
+      async function loadContests() {
+        try {
+          const rows = await SB.get("contests", "select=*&order=sort_order.asc");
+          if (Array.isArray(rows) && rows.length) return rows;
+        } catch (e) {
+          console.warn("读取在线竞赛失败，使用本地数据:", e.message);
+        }
+        return fetchSection("contests");
+      }
+
+      const contests = await loadContests();
+      const root = document.getElementById("contests");
+      if (!contests.length) {
+        root.innerHTML = `<div class="state">暂无进行中的竞赛，敬请期待</div>`;
+        return;
+      }
+      root.innerHTML = contests.map((c) => `
+        <article class="contest-card">
+          <div class="contest-head">
+            <h2>${esc(c.title)}</h2>
+            ${c.status ? `<span class="status-badge s-${esc(c.status)}">${esc(c.status)}</span>` : ""}
+          </div>
+          <div class="contest-meta">
+            ${c.deadline ? `<span>⏰ 投稿截止：${esc(c.deadline)}</span>` : ""}
+          </div>
+          ${c.topic ? `<div class="contest-sec"><h3>主题</h3><p>${esc(c.topic)}</p></div>` : ""}
+          ${c.rules || c.rules_html ? `<div class="contest-sec"><h3>参赛规则</h3>${c.rules_html && String(c.rules_html).trim() ? `<div class="md">${sanitizeHtml(c.rules_html)}</div>` : `<div class="md">${renderMarkdown(c.rules)}</div>`}</div>` : ""}
+          ${c.attachment_url ? `<p style="margin-top:1rem"><a class="btn ghost" href="${esc(c.attachment_url)}" target="_blank" rel="noopener">下载告示附件${c.attachment_name ? `（${esc(c.attachment_name)}）` : ""}</a></p>` : ""}
+          ${c.awards ? `<div class="contest-sec"><h3>奖项设置</h3><p>${esc(c.awards)}</p></div>` : ""}
+          ${c.winners ? `<div class="contest-sec"><h3>获奖名单</h3><p>${esc(c.winners)}</p></div>` : ""}
+          ${c.status === "报名中" ? `<p style="margin-top:1.25rem"><a class="btn" href="submit.html?contest=${encodeURIComponent(c.title)}">前往投稿</a></p>` : ""}
+        </article>`).join("");
+    })().catch((e) => {
+      document.getElementById("contests").innerHTML = `<div class="state">竞赛信息加载失败，请稍后刷新重试。</div>`;
+      console.error(e);
+    });
+  </script>
+</body>
+</html>

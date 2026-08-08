@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>关于 · 温州中学科学及幻想文学社</title>
+  <meta name="description" content="关于我们：社团简介、部门构成与加入方式。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="关于我们 · 温州中学科学及幻想文学社">
+  <meta property="og:description" content="读科幻、写幻想、观星象、聊未来。">
+  <meta property="og:image" content="https://sne-program.github.io/wenzhou-sf-club-site/images/og-default.png">
+  <meta property="og:url" content="https://sne-program.github.io/wenzhou-sf-club-site/about.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>关于我们</h1>
+    </div>
+
+    <div class="prose">
+      <h2 class="section-title">社团简介</h2>
+      <p id="about-intro">正在载入……</p>
+
+      <h2 class="section-title">我们在做什么</h2>
+      <p><strong>读</strong>：科幻经典共读与自由讨论；</p>
+      <p><strong>写</strong>：原创科幻征文、社刊与作品集；</p>
+      <p><strong>看</strong>：观星观测、科技馆参观与影视沙龙；</p>
+      <p><strong>聊</strong>：从硬核设定到天马行空，无所不聊。</p>
+
+      <h2 class="section-title">加入我们</h2>
+      <p>招新通常于每学期初进行，无需任何门槛——只要你对科学或幻想保有好奇心。欢迎在招新开放日来我们的展位，或直接通过下方邮箱联系我们。</p>
+      <p>联系方式：<strong id="contact-email">正在载入……</strong></p>
+
+      <h2 class="section-title">投稿</h2>
+      <p>有作品或活动想法想与大家分享？注册并登录后即可投稿，审核通过后会在网站上发布。</p>
+      <p style="margin-top:1rem"><a class="btn" href="submit.html">去投稿</a></p>
+
+      <h2 class="section-title">站规</h2>
+      <p>使用本站即视为已知悉并同意网站站规。站规涵盖账号、评论、表态、举报、投稿、竞赛、知识产权与隐私等规范。</p>
+      <p style="margin-top:1rem"><a class="btn ghost" href="rules.html">查看网站站规</a></p>
+
+      <p style="margin-top:1.5rem"><a class="btn" href="index.html">返回首页</a></p>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=8"></script>
+  <script src="js/api.js?v=6"></script>
+  <script src="js/supabase.js?v=8"></script>
+  <script src="js/auth.js?v=15"></script>
+  <script>
+    (async function () {
+      const site = await fetchSection("site");
+      const intro = document.querySelector("#about-intro");
+      const email = document.querySelector("#contact-email");
+      if (site.intro) intro.textContent = site.intro;
+      if (site.contactEmail) email.textContent = site.contactEmail;
+      if (site.name) document.title = "关于 · " + site.name;
+    })().catch((e) => {
+      console.error(e);
+    });
+  </script>
+</body>
+</html>

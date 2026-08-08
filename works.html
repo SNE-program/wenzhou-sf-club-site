@@ -1,0 +1,138 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>作品 · 温州中学科学及幻想文学社</title>
+  <meta name="description" content="社员原创科幻作品集：小说、设定、随笔……">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="社员作品 · 温州中学科学及幻想文学社">
+  <meta property="og:description" content="小说、设定、随笔——每一篇都始于一个脑洞。">
+  <meta property="og:image" content="https://sne-program.github.io/wenzhou-sf-club-site/images/og-default.png">
+  <meta property="og:url" content="https://sne-program.github.io/wenzhou-sf-club-site/works.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>社员作品</h1>
+      <div class="sub">小说、设定集、科普随笔 —— 每一篇都始于一个脑洞。</div>
+    </div>
+
+    <div class="filter-bar" id="work-filter" hidden></div>
+
+    <div class="grid" id="works">
+      <div class="state"><div class="spinner"></div>正在加载作品……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=8"></script>
+  <script src="js/api.js?v=6"></script>
+  <script src="js/supabase.js?v=8"></script>
+  <script src="js/auth.js?v=15"></script>
+  <script>
+    (async function () {
+      const works = await fetchSection("works");
+
+      // ---------- 分类 + 标签组合筛选 ----------
+      const filterBar = document.getElementById("work-filter");
+      const params = new URLSearchParams(location.search);
+      let curCat = (params.get("分类") || "").trim();
+      let curTags = (params.get("标签") || "").split(",").map((s) => s.trim()).filter(Boolean);
+
+      function unique(values) {
+        return [...new Set(values.filter(Boolean))];
+      }
+      function match(item) {
+        if (curCat && item.category !== curCat) return false;
+        return curTags.every((t) => (item.tags || []).includes(t));
+      }
+      function pushState() {
+        const url = new URL(location.href);
+        if (curCat) url.searchParams.set("分类", curCat); else url.searchParams.delete("分类");
+        if (curTags.length) url.searchParams.set("标签", curTags.join(",")); else url.searchParams.delete("标签");
+        history.replaceState(null, "", url.pathname + url.search);
+      }
+
+      function renderChips() {
+        const cats = unique(works.map((w) => w.category));
+        const tagCount = {};
+        works.forEach((w) => (w.tags || []).forEach((t) => { tagCount[t] = (tagCount[t] || 0) + 1; }));
+        // 标签按出现次数降序（标签排序管理）
+        const tags = Object.keys(tagCount).sort((a, b) => tagCount[b] - tagCount[a]);
+
+        const catChips = cats.map((c) => `
+          <button class="filter-chip${c === curCat ? " active" : ""}" data-kind="cat" data-v="${esc(c)}">
+            ${esc(c)}<span class="cnt">${works.filter((w) => w.category === c).length}</span>
+          </button>`);
+        const tagChips = tags.map((t) => `
+          <button class="filter-chip${curTags.includes(t) ? " active" : ""}" data-kind="tag" data-v="${esc(t)}">
+            #${esc(t)}<span class="cnt">${tagCount[t]}</span>
+          </button>`);
+
+        filterBar.innerHTML = catChips.concat(tagChips).join("");
+        filterBar.hidden = !(catChips.length || tagChips.length);
+      }
+
+      filterBar.addEventListener("click", (e) => {
+        const chip = e.target.closest(".filter-chip");
+        if (!chip) return;
+        const v = chip.dataset.v;
+        if (chip.dataset.kind === "cat") curCat = curCat === v ? "" : v; // 分类单选，再点取消
+        else curTags = curTags.includes(v) ? curTags.filter((t) => t !== v) : [...curTags, v]; // 标签多选
+        pushState();
+        renderChips();
+        renderGrid();
+      });
+
+      // ---------- 作品网格 ----------
+      // 摘要为占位词（如“见附件”）且存在附件时，卡片显示引导文案
+      function cardSummary(it) {
+        const s = (it.summary || "").trim();
+        if ((/^(见附件|详见附件|附件见文件|暂无|无)$/.test(s) || !s) && it.attachment)
+          return "附件投稿 · 点击查看";
+        return s;
+      }
+      function renderGrid() {
+        const list = works.filter(match);
+        document.querySelector("#works").innerHTML = list.length
+          ? list.map((it) => `
+            <a class="card" href="articles/${encodeURIComponent(it.id)}.html">
+              <div class="card-cover" style="${coverStyle(it, it.title)}"><span class="cover-title">${esc(coverText(it.title))}</span></div>
+              <div class="card-body">
+                <h3>${esc(it.title)}</h3>
+                <p>${esc(cardSummary(it))}</p>
+                <div class="card-meta">
+                  <span>${esc(it.category || "未分类")}</span>
+                  ${it.author ? `<span>${esc(it.author)}</span>` : ""}
+                  ${it.tags && it.tags.length ? it.tags.map((t) => `<span>#${esc(t)}</span>`).join("") : ""}
+                </div>
+              </div>
+            </a>`).join("")
+          : `<div class="state">没有符合条件的作品，换个分类或标签试试</div>`;
+      }
+      renderChips();
+      renderGrid();
+    })().catch((e) => {
+      document.querySelector("#works").innerHTML =
+        `<div class="state">作品加载失败，请检查网络后重试。<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+      console.error(e);
+    });
+  </script>
+</body>
+</html>

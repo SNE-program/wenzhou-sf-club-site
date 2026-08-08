@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>投稿 · 温州中学科学及幻想文学社</title>
+  <meta name="description" content="注册并登录后即可投稿，审核通过后发布到社团网站。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="投稿 · 温州中学科学及幻想文学社">
+  <meta property="og:description" content="读科幻、写幻想、观星象、聊未来。">
+  <meta property="og:image" content="https://sne-program.github.io/wenzhou-sf-club-site/images/og-default.png">
+  <meta property="og:url" content="https://sne-program.github.io/wenzhou-sf-club-site/submit.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+  <style>
+    .submit-form { max-width: 44rem; display: grid; gap: 1.1rem; }
+    .s-field { display: grid; gap: 0.4rem; font-size: 0.95rem; color: var(--text); }
+    .s-field > input[type="text"],
+    .s-field > input[type="url"],
+    .s-field > textarea,
+    .s-field > input[type="file"] {
+      width: 100%; box-sizing: border-box;
+      padding: 0.65rem 0.8rem; border-radius: 11px; font-size: 0.95rem;
+      background: var(--surface); border: 1px solid var(--border); color: var(--text);
+      font-family: inherit;
+    }
+    .s-field > input[type="file"] { cursor: pointer; padding: 0.5rem 0.8rem; }
+    .s-field > textarea { resize: vertical; min-height: 12rem; line-height: 1.7; }
+    .s-field > input:focus, .s-field > textarea:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(232, 177, 76, 0.12);
+    }
+    .s-fname { font-size: 0.85rem; color: var(--text-dim); word-break: break-all; }
+    .s-prev {
+      max-width: 12rem; max-height: 8rem; object-fit: cover;
+      border-radius: 10px; border: 1px solid var(--border);
+    }
+    .s-req { color: var(--danger); }
+    .s-hint { font-size: 0.82rem; color: var(--text-dim); }
+    .s-opts { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .s-opt {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      padding: 0.35rem 0.85rem; border: 1px solid var(--border); border-radius: 999px;
+      cursor: pointer; font-size: 0.9rem; color: var(--text-dim);
+      background: var(--surface); user-select: none; font-family: inherit; line-height: 1.4;
+    }
+    .s-opt:hover { border-color: var(--text-dim); color: var(--text); }
+    .s-opt.on { border-color: var(--accent); color: var(--accent); background: var(--surface-hover); font-weight: 600; }
+    .file-pick { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+    .file-btn { margin: 0; }
+    .s-meta { font-size: 0.85rem; color: var(--text-dim); margin: 0; }
+    .submit-done { max-width: 40rem; text-align: center; padding: 2.5rem 1.5rem; }
+    .submit-done .big { font-size: 1.15rem; font-weight: 700; color: var(--text); margin-bottom: 0.8rem; }
+  </style>
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>投稿</h1>
+      <div class="sub">注册并登录后即可投稿。稿件进入审核队列，通过后会自动发布到「作品」栏目并邮件通知你。</div>
+    </div>
+
+    <div id="submit-root">
+      <div class="state"><div class="spinner"></div>正在加载……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=8"></script>
+  <script src="js/api.js?v=6"></script>
+  <script src="js/supabase.js?v=8"></script>
+  <script src="js/auth.js?v=15"></script>
+  <!-- Word 转 Markdown（本地 vendor，仅选择 .docx/.docm 附件时用到） -->
+  <script src="js/vendor/mammoth.min.js"></script>
+  <script src="js/vendor/turndown.min.js"></script>
+  <script>
+    const FUNC_URL = `${SB.url}/functions/v1/submit-work`;
+    const TYPE_OPTIONS = ["短篇小说", "世界观设定", "科普随笔", "其他"];
+
+    async function callFn(url, opts = {}, isRetry = false) {
+      const headers = { apikey: SB.anon, "Content-Type": "application/json", ...(opts.headers || {}) };
+      const token = SB.token();
+      if (token) headers.Authorization = "Bearer " + token;
+      const res = await fetch(url, { ...opts, headers });
+      if (res.status === 401 && !isRetry) {
+        const refreshed = await SB.refresh();
+        if (refreshed) return callFn(url, opts, true);
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `请求失败 ${res.status}`);
+      return data;
+    }
+
+    async function loadContests() {
+      try {
+        const list = await fetchSection("contests");
+        return (list || []).filter(
+          (c) => c.title && c.title !== "暂无竞赛" && c.status !== "已结束"
+        );
+      } catch (e) {
+        return [];
+      }
+    }
+
+    async function buildForm(user) {
+      const profile = await window.getMyProfile().catch(() => null);
+      const defaultNick =
+        (profile && profile.nickname) ||
+        (user.user_metadata && user.user_metadata.nickname) ||
+        (user.email || "").split("@")[0] ||
+        "星尘";
+      const contests = await loadContests();
+
+      const root = document.getElementById("submit-root");
+      root.innerHTML = `
+        <form class="submit-form" id="submit-form" novalidate>
+          <label class="s-field">标题<span class="s-req">*</span>
+            <input type="text" id="s-title" maxlength="80" placeholder="给你的作品起个名字">
+          </label>
+
+          <label class="s-field">作者笔名
+            <input type="text" id="s-nick" maxlength="20" value="${esc(defaultNick)}">
+            <span class="s-hint">笔名将展示在作品页；不填写则使用注册昵称。</span>
+          </label>
+
+          <div class="s-field">投稿类型<span class="s-req">*</span>
+            <div class="s-opts" id="s-types">
+              ${TYPE_OPTIONS.map((t) => `<button type="button" class="s-opt" data-v="${esc(t)}">${esc(t)}</button>`).join("")}
+            </div>
+          </div>
+
+          <label class="s-field">正文内容<span class="s-req">*</span>
+            <textarea id="s-body" maxlength="20000" placeholder="粘贴或直接书写作品正文（支持换行，最长 20000 字）"></textarea>
+          </label>
+
+          <div class="s-field">封面图片（可选）
+            <div class="file-pick">
+              <label class="btn ghost file-btn" for="s-cover">选择图片</label>
+              <input type="file" id="s-cover" accept="image/*" hidden>
+              <span class="s-fname" id="s-cover-name">未选择图片</span>
+            </div>
+            <img class="s-prev" id="s-cover-prev" alt="封面预览" hidden>
+            <span class="s-hint">可选。本地上传一张图片作为封面（≤10MB），会在作品列表与文章页展示；不填则使用主题渐变封面。</span>
+          </div>
+
+          <div class="s-field">附件（可选）
+            <div class="file-pick">
+              <label class="btn ghost file-btn" for="s-file">选择附件</label>
+              <input type="file" id="s-file" hidden>
+              <span class="s-fname" id="s-file-name">未选择附件</span>
+            </div>
+            <button class="btn ghost" type="button" id="s-to-md">转换为 Markdown</button>
+            <span class="s-hint" id="s-file-hint">可选。可附 1 个任意文件（Word / PDF / 压缩包 / 图片等，≤10MB），审核通过后会在作品页提供下载。</span>
+            <span class="s-hint" id="s-to-md-hint" hidden>仅 Word（.docx / .docm）附件可转换；选择后点上方按钮即可把正文识别并写入「正文内容」。</span>
+          </div>
+
+          ${contests.length ? `
+          <div class="s-field">所属竞赛（可选）
+            <div class="s-opts" id="s-contests">
+              ${contests.map((c) => `<button type="button" class="s-opt" data-v="${esc(c.title)}">${esc(c.title)}</button>`).join("")}
+            </div>
+          </div>` : ""}
+
+          <p class="s-meta">投稿邮箱：<b>${esc(user.email || "")}</b>（仅用于审核结果邮件通知，不会公开展示）</p>
+
+          <p class="form-err" id="s-err" hidden></p>
+          <p class="form-ok" id="s-ok" hidden></p>
+
+          <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+            <button class="btn" type="submit" id="s-submit">提交投稿</button>
+            <span class="s-hint">提交后可在管理后台查看；审核通过通常不超过 5 分钟，会邮件通知你。</span>
+          </div>
+        </form>`;
+
+      // 类型/竞赛选项样式
+      document.querySelectorAll(".s-opt").forEach((opt) => {
+        opt.addEventListener("click", () => opt.classList.toggle("on"));
+      });
+
+      // 来自竞赛页的投稿入口：?contest=xxx 自动预选「所属竞赛」
+      const preselect = new URLSearchParams(location.search).get("contest");
+      if (preselect) {
+        const box = document.getElementById("s-contests");
+        const target = box && [...box.querySelectorAll(".s-opt")].find((el) => el.dataset.v === preselect);
+        if (target) {
+          target.classList.add("on");
+        } else if (box) {
+          const note = document.createElement("p");
+          note.className = "s-hint";
+          note.textContent = `「${preselect}」已结束或不存在，仍可按普通作品投稿。`;
+          box.insertAdjacentElement("beforebegin", note);
+        }
+      }
+
+      const form = document.getElementById("submit-form");
+      const errEl = document.getElementById("s-err");
+      const okEl = document.getElementById("s-ok");
+      const submit = document.getElementById("s-submit");
+      const coverInput = document.getElementById("s-cover");
+      const fileInput = document.getElementById("s-file");
+      const MAX_FILE = 10 * 1024 * 1024; // 10MB
+
+      // 封面：选中即预览
+      coverInput.addEventListener("change", () => {
+        const f = coverInput.files[0];
+        const nameEl = document.getElementById("s-cover-name");
+        const prev = document.getElementById("s-cover-prev");
+        if (!f) { nameEl.textContent = "未选择图片"; prev.hidden = true; return; }
+        if (!f.type.startsWith("image/")) { nameEl.textContent = "请选择图片文件"; coverInput.value = ""; return; }
+        nameEl.textContent = `${f.name}（${(f.size / 1024 / 1024).toFixed(1)}MB）`;
+        if (f.size > MAX_FILE) { nameEl.textContent = "图片超过 10MB，请压缩后重试"; coverInput.value = ""; prev.hidden = true; return; }
+        const reader = new FileReader();
+        reader.onload = () => { prev.src = reader.result; prev.hidden = false; };
+        reader.readAsDataURL(f);
+      });
+      fileInput.addEventListener("change", () => {
+        const f = fileInput.files[0];
+        const nameEl = document.getElementById("s-file-name");
+        const toMdHint = document.getElementById("s-to-md-hint");
+        if (!f) { nameEl.textContent = "未选择附件"; return; }
+        if (f.size > MAX_FILE) {
+          nameEl.textContent = "附件超过 10MB，请压缩后重试";
+          return;
+        }
+        nameEl.textContent = `${f.name}（${(f.size / 1024 / 1024).toFixed(1)}MB）`;
+        if (toMdHint) {
+          toMdHint.hidden = false;
+          toMdHint.textContent = /\.(docx|docm)$/i.test(f.name)
+            ? "已选择 Word 附件，可点上方「转换为 Markdown」识别正文。"
+            : "当前附件不是 Word（.docx / .docm），无法一键转换，可直接在正文区粘贴内容。";
+        }
+      });
+
+      // Word → Markdown：mammoth(Word→HTML) + turndown(HTML→Markdown)，纯浏览器本地完成
+      const toMd = document.getElementById("s-to-md");
+      if (toMd) {
+        toMd.addEventListener("click", async () => {
+          const f = fileInput.files[0];
+          const toMdHint = document.getElementById("s-to-md-hint");
+          if (toMdHint) { toMdHint.hidden = false; }
+          if (!f) {
+            if (toMdHint) toMdHint.textContent = "请先在「附件」中选择一个 Word（.docx / .docm）文件";
+            return;
+          }
+          if (!/\.(docx|docm)$/i.test(f.name)) {
+            if (toMdHint) toMdHint.textContent = "仅支持 .docx / .docm 文件，请重新选择附件";
+            return;
+          }
+          if (typeof window.mammoth !== "object" || typeof window.TurndownService !== "function") {
+            if (toMdHint) toMdHint.textContent = "转换组件加载失败，请刷新页面重试";
+            return;
+          }
+          toMd.disabled = true;
+          toMd.textContent = "转换中…";
+          try {
+            const arrayBuffer = await f.arrayBuffer();
+            const { value: html } = await window.mammoth.convertToHtml({ arrayBuffer });
+            const md = new window.TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" }).turndown(html);
+            const bodyEl = document.getElementById("s-body");
+            if (!md.trim()) throw new Error("未识别到文字内容");
+            bodyEl.value = md.trim() + "\n";
+            if (toMdHint) {
+              const extra = md.trim().length > 20000 ? "（识别内容较长，超出部分请在正文中精简）" : "";
+              toMdHint.textContent = `已把《${f.name}》识别为 Markdown 写入正文，请检查后提交。${extra}`;
+              toMdHint.hidden = false;
+            }
+          } catch (err) {
+            if (toMdHint) { toMdHint.textContent = "转换失败：" + (err.message || "未知错误") + "。可在正文中直接粘贴文本。"; toMdHint.hidden = false; }
+          } finally {
+            toMd.disabled = false;
+            toMd.textContent = "转换为 Markdown";
+          }
+        });
+      }
+
+      // 上传单个文件到 Supabase Storage，返回公开 URL
+      async function uploadOne(file) {
+        if (!file) return "";
+        if (file.size > MAX_FILE) throw new Error("单个文件不能超过 10MB");
+        const uid = (SB.user() || {}).id || "anon";
+        // 文件名清理：替换路径非法字符；非 ASCII（中文等）一律转下划线，避免 Storage InvalidKey
+        const safe = String(file.name || "file")
+          .replace(/[\\/:*?"<>|#%&{}$!'@+`=]/g, "_")
+          .replace(/[^\x00-\x7F]/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^_|_$/g, "")
+          .slice(0, 60) || "file";
+        const path = `submissions/${uid}/${Date.now()}_${safe}`;
+        return SB.uploadFile(path, file);
+      }
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        errEl.hidden = true;
+        okEl.hidden = true;
+        const title = document.getElementById("s-title").value.trim();
+        const nickname = document.getElementById("s-nick").value.trim();
+        const body = document.getElementById("s-body").value.trim();
+        const types = [...document.querySelectorAll("#s-types .s-opt.on")].map((el) => el.dataset.v);
+        const contestsEl = document.getElementById("s-contests");
+        const contests = contestsEl ? [...contestsEl.querySelectorAll(".s-opt.on")].map((el) => el.dataset.v) : [];
+
+        if (!title) return fail("请填写作品标题");
+        if (!types.length) return fail("请至少选择一个投稿类型");
+        if (!body) return fail("请填写正文内容");
+
+        const coverFile = coverInput.files[0];
+        const attachFile = fileInput.files[0];
+        if (coverFile && !coverFile.type.startsWith("image/")) return fail("封面必须为图片文件");
+        if ((coverFile || attachFile) && [...(coverFile ? [coverFile] : []), ...(attachFile ? [attachFile] : [])].some((f) => f.size > MAX_FILE)) {
+          return fail("单个文件不能超过 10MB");
+        }
+
+        submit.disabled = true;
+        submit.textContent = "上传中…";
+        try {
+          let cover = "", attachment = null;
+          if (coverFile) { submit.textContent = "上传封面…"; cover = await uploadOne(coverFile); }
+          if (attachFile) { submit.textContent = "上传附件…"; attachment = { url: await uploadOne(attachFile), name: attachFile.name }; }
+          submit.textContent = "提交中…";
+          await callFn(FUNC_URL, {
+            method: "POST",
+            body: JSON.stringify({ title, nickname, types, body, cover, attachment, contests }),
+          });
+          root.innerHTML = `
+            <div class="submit-done">
+              <div class="big">🎉 投稿成功！</div>
+              <p class="s-meta">《${esc(title)}》已进入审核队列。审核通过后会自动发布到「作品」栏目，并通过邮箱通知你（${esc(user.email || "")}）。</p>
+              <p style="margin-top:1.5rem"><a class="btn" href="works.html">去看作品</a> <a class="btn ghost" href="submit.html">再投一篇</a></p>
+            </div>`;
+        } catch (err) {
+          fail(err.message || "投稿失败，请重试");
+          submit.disabled = false;
+          submit.textContent = "提交投稿";
+        }
+      });
+
+      function fail(msg) {
+        errEl.textContent = msg;
+        errEl.hidden = false;
+      }
+    }
+
+    function render() {
+      const root = document.getElementById("submit-root");
+      const user = SB.user();
+      if (!user) {
+        root.innerHTML = `
+          <div class="state">
+            <p>投稿需要先注册并登录账号（在校学生经学号姓名与名册自动核验，非在校用户由管理员审核）。</p>
+            <p style="margin-top:1rem"><button class="btn" id="go-login" type="button">登录 / 注册</button></p>
+          </div>`;
+        document.getElementById("go-login").addEventListener("click", () => window.openAuthModal("login"));
+        return;
+      }
+      buildForm(user);
+    }
+
+    document.addEventListener("DOMContentLoaded", render);
+    window.addEventListener("sb-auth-changed", render);
+  </script>
+</body>
+</html>

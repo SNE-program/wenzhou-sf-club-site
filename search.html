@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>搜索 · 温州中学科学及幻想文学社</title>
+  <meta name="description" content="站内搜索：作品、活动、页面。">
+  <meta name="robots" content="noindex,follow">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="站内搜索 · 温州中学科学及幻想文学社">
+  <meta property="og:description" content="读科幻、写幻想、观星象、聊未来。">
+  <meta property="og:image" content="https://sne-program.github.io/wenzhou-sf-club-site/images/og-default.png">
+  <meta property="og:url" content="https://sne-program.github.io/wenzhou-sf-club-site/search.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>站内搜索</h1>
+      <div class="sub">搜索作品与活动，直达你感兴趣的脑洞。</div>
+    </div>
+
+    <form class="search-form" role="search" action="search.html" method="get">
+      <input type="search" name="q" id="search-input" placeholder="输入关键词，如：科幻、沙丘、征文…" aria-label="搜索关键词" autocomplete="off">
+      <button class="btn" type="submit">搜索</button>
+    </form>
+    <p class="search-stat" id="search-stat"></p>
+
+    <div id="results">
+      <div class="state"><div class="spinner"></div>正在加载索引……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=8"></script>
+  <script src="js/api.js?v=6"></script>
+  <script src="js/supabase.js?v=8"></script>
+  <script src="js/auth.js?v=15"></script>
+  <script>
+    const q = ((new URLSearchParams(location.search).get("q")) || "").trim();
+    const input = document.getElementById("search-input");
+    if (input) input.value = q;
+
+    // 关键词高亮（先转义，再包 <mark>，支持多次出现）
+    function hl(text, kw) {
+      const s = String(text || "");
+      const low = s.toLowerCase();
+      const idx = low.indexOf(kw.toLowerCase());
+      if (idx === -1) return esc(s);
+      return (
+        esc(s.slice(0, idx)) +
+        "<mark>" + esc(s.slice(idx, idx + kw.length)) + "</mark>" +
+        hl(s.slice(idx + kw.length), kw)
+      );
+    }
+
+    function searchable(item) {
+      return [
+        item.title, item.summary, item.body, item.author, item.category, item.location, item.date,
+        ...(item.tags || []),
+      ].filter(Boolean).join(" ").toLowerCase();
+    }
+
+    function renderList(items, kw, showDate) {
+      return items.map((it) => `
+        <a class="card" href="articles/${encodeURIComponent(it.id)}.html">
+          <div class="card-cover" style="${coverStyle(it, it.title)}"><span class="cover-title">${esc(coverText(it.title))}</span></div>
+          <div class="card-body">
+            <h3>${hl(it.title, kw)}</h3>
+            <p>${hl(it.summary, kw)}</p>
+            <div class="card-meta">
+              ${it.category ? `<span>${esc(it.category)}</span>` : ""}
+              ${it.location ? `<span>${esc(it.location)}</span>` : ""}
+              ${showDate ? `<span>${esc(dateLabel(it.date))}</span>` : ""}
+              ${it.tags && it.tags.length ? it.tags.slice(0, 2).map((t) => `<span>#${esc(t)}</span>`).join("") : ""}
+            </div>
+          </div>
+        </a>`).join("");
+    }
+
+    (async function () {
+      const box = document.getElementById("results");
+      if (!q) {
+        box.innerHTML = `<p class="search-none">输入关键词开始搜索，例如「科幻」「沙丘」「征文」。</p>`;
+        return;
+      }
+      try {
+        const [acts, works] = await Promise.all([fetchSection("activities"), fetchSection("works")]);
+        const hitActs = acts.filter((a) => searchable(a).includes(q.toLowerCase()));
+        const hitWorks = works.filter((w) => searchable(w).includes(q.toLowerCase()));
+
+        const total = hitActs.length + hitWorks.length;
+        document.getElementById("search-stat").textContent = total
+          ? `找到 ${total} 条与「${q}」相关的结果`
+          : "";
+
+        if (!total) {
+          box.innerHTML = `<p class="search-none">没有找到与「${esc(q)}」相关的内容，换个关键词试试？</p>`;
+          return;
+        }
+        let html = "";
+        if (hitWorks.length) {
+          html += `<h2 class="search-group-title">作品<span class="cnt">${hitWorks.length}</span></h2><div class="grid">${renderList(hitWorks, q, false)}</div>`;
+        }
+        if (hitActs.length) {
+          html += `<h2 class="search-group-title">活动<span class="cnt">${hitActs.length}</span></h2><div class="grid">${renderList(hitActs, q, true)}</div>`;
+        }
+        box.innerHTML = html;
+      } catch (e) {
+        box.innerHTML = `<p class="search-none">搜索失败：${esc(e.message)}<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></p>`;
+        console.error(e);
+      }
+    })();
+  </script>
+</body>
+</html>

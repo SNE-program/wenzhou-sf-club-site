@@ -1,0 +1,147 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>入站审核 · 温州中学科学及幻想文学社</title>
+  <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>入站审核</h1>
+      <div class="sub">新用户需完成邮箱验证，并经管理员审核通过后，才能评论、表态、举报。</div>
+      <p style="margin-top:1rem"><a class="btn" href="admin-users.html">人员管理</a> <a class="btn" href="admin-reports.html">举报处理</a> <a class="btn" href="admin-comments.html">评论管理</a> <a class="btn" href="admin-submissions.html">投稿审核</a> <a class="btn" href="admin-works.html">作品管理</a> <a class="btn" href="admin-contests.html">管理竞赛</a></p>
+    </div>
+    <div id="admin-root">
+      <div class="state"><div class="spinner"></div>正在加载……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=8"></script>
+  <script src="js/api.js?v=6"></script>
+  <script src="js/supabase.js?v=8"></script>
+  <script src="js/auth.js?v=15"></script>
+  <script>
+    const FUNC_URL = "https://edfxoxcvprjzbemojshr.supabase.co/functions/v1/send-audit-email";
+
+    function timeLabel(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    (async function () {
+      const root = document.getElementById("admin-root");
+      const user = SB.user();
+      if (!user) {
+        root.innerHTML = `<div class="state"><p>请先登录管理员账号</p><p style="margin-top:1rem"><button class="btn" id="go-login" type="button">登录</button></p></div>`;
+        document.getElementById("go-login").addEventListener("click", () => window.openAuthModal("login"));
+        return;
+      }
+      const me = await window.getMyProfile();
+      if (!me || !me.is_admin) {
+        root.innerHTML = `<div class="state">你没有审核权限。</div>`;
+        return;
+      }
+
+      let rows = [];
+      try {
+        rows = await SB.get(
+          "profiles",
+          "status=eq.pending&select=user_id,nickname,email,created_at&order=created_at.asc"
+        );
+      } catch (e) {
+        root.innerHTML = `<div class="state">加载失败：${esc(e.message)}<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+        return;
+      }
+
+      if (!rows.length) {
+        root.innerHTML = `<div class="state">当前没有待审核的用户。</div>`;
+        return;
+      }
+
+      function renderList() {
+        root.innerHTML = `
+          <div class="audit-count">待审核 <b>${rows.length}</b> 人</div>
+          ${rows.map((u) => `
+            <div class="audit-item" data-uid="${u.user_id}">
+              <div class="audit-info">
+                <span class="c-nick">${esc(u.nickname || "（无昵称）")}</span>
+                <span class="c-time">${esc(u.email || "")}</span>
+                <span class="c-time">注册于 ${esc(timeLabel(u.created_at))}</span>
+              </div>
+              <div class="c-actions">
+                <button class="btn audit-pass" type="button">通过</button>
+                <button class="c-btn audit-reject" type="button">拒绝</button>
+              </div>
+            </div>`).join("")}`;
+        root.querySelectorAll(".audit-item").forEach((item) => {
+          const uid = item.dataset.uid;
+          item.querySelector(".audit-pass").addEventListener("click", () => setStatus(uid, "approved", item));
+          item.querySelector(".audit-reject").addEventListener("click", () => setStatus(uid, "rejected", item));
+        });
+      }
+
+      async function setStatus(uid, status, item) {
+        const u = rows.find((r) => r.user_id === uid);
+        const act = status === "approved" ? "通过" : "拒绝";
+        if (!confirm(`确认${act}「${u.nickname || u.email}」吗？`)) return;
+        const btns = item.querySelectorAll("button");
+        btns.forEach((b) => (b.disabled = true));
+        try {
+          await SB.update("profiles", { status }, `user_id=eq.${uid}`);
+          // 邮件通知（Edge Function，尽力而为；未部署/未配置 SMTP 时静默降级）
+          let mailNote = "";
+          try {
+            const r = await fetch(FUNC_URL, {
+              method: "POST",
+              headers: {
+                apikey: SB.anon,
+                Authorization: "Bearer " + SB.token(),
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ email: u.email, nickname: u.nickname, status }),
+            });
+            if (!r.ok) mailNote = "（邮件服务未配置，通知未发送）";
+          } catch (e) {
+            mailNote = "（邮件服务未配置，通知未发送）";
+          }
+          rows = rows.filter((r) => r.user_id !== uid);
+          if (!rows.length) {
+            root.innerHTML = `<div class="state">已处理完毕，当前没有待审核用户。</div>`;
+          } else {
+            renderList();
+            const note = document.createElement("p");
+            note.className = "audit-note";
+            note.textContent = `已将「${u.nickname || u.email}」标记为${act}${mailNote}`;
+            root.insertAdjacentElement("beforeend", note);
+          }
+        } catch (e) {
+          alert("操作失败：" + e.message);
+          btns.forEach((b) => (b.disabled = false));
+        }
+      }
+
+      renderList();
+    })();
+  </script>
+</body>
+</html>
