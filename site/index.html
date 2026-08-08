@@ -76,7 +76,7 @@
 
   <div data-footer></div>
 
-  <script src="js/common.js?v=6"></script>
+  <script src="js/common.js?v=7"></script>
   <script src="js/api.js?v=5"></script>
   <script src="js/supabase.js?v=6"></script>
   <script src="js/auth.js?v=2"></script>
@@ -92,7 +92,7 @@
       return VALID_STYLES.includes(s) ? s : "brass";
     }
     function armillaryOn() {
-      try { return localStorage.getItem("wzsf-armillary") !== "0"; } catch (e) { return true; }
+      try { return localStorage.getItem("wzsf-armillary") === "1"; } catch (e) { return false; }
     }
     function minimalOn() {
       return document.documentElement.classList.contains("minimal");

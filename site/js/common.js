@@ -151,7 +151,7 @@
       try { return localStorage.getItem(MINIMAL_KEY) === "1"; } catch (e) { return false; }
     }
     function armillaryOn() {
-      try { return localStorage.getItem(ARMILLARY_KEY) !== "0"; } catch (e) { return true; }
+      try { return localStorage.getItem(ARMILLARY_KEY) === "1"; } catch (e) { return false; }
     }
     function injectSettings() {
       if (document.getElementById("settings-pop")) return;
