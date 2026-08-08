@@ -11,6 +11,7 @@
   function friendlyAuthError(msg) {
     const m = String(msg || "");
     const map = [
+      [/duplicate key value violates unique constraint/i, "该昵称已被占用，请更换昵称"],
       [/rate limit/i, "操作过于频繁，请稍后再试（邮件服务限流）"],
       [/user already registered/i, "该邮箱已注册，请直接登录"],
       [/invalid login credentials/i, "邮箱或密码错误"],
@@ -21,6 +22,19 @@
     ];
     for (const [re, text] of map) if (re.test(m)) return text;
     return null;
+  }
+
+  // 登录输入解析：邮箱直接返回；昵称则反查其绑定的邮箱（昵称已全站唯一）
+  async function resolveAccount(input) {
+    if (/^\S+@\S+\.\S+$/.test(input)) return input;
+    const rows = await SB.get(
+      "profiles",
+      `nickname=eq.${encodeURIComponent(input)}&select=email&limit=1`
+    );
+    if (!rows || !rows[0] || !rows[0].email) {
+      throw new Error(`未找到昵称为「${input}」的账号`);
+    }
+    return rows[0].email;
   }
 
   // 顶部轻提示（邮箱验证结果等），自带样式，无需改 CSS 版本号
@@ -110,6 +124,7 @@
         <span class="auth-user" title="${esc(user.email || "")}">${esc(nick)}${profile && profile.real_name ? `<span class="c-real">${esc(profile.real_name)}</span>` : ""}</span>
         ${tag}
         ${!profile.real_name ? `<button class="auth-btn" type="button" id="btn-verify" title="在校学生可凭学号姓名通过名册自动核验">实名认证</button>` : ""}
+        <button class="auth-btn" type="button" id="btn-rename" title="修改昵称（7 天内仅可修改一次）">改名</button>
         <button class="auth-btn" type="button" id="btn-logout">退出</button>`;
       document.getElementById("btn-logout").addEventListener("click", async () => {
         await SB.signOut();
@@ -117,6 +132,8 @@
       });
       const verifyBtn = document.getElementById("btn-verify");
       if (verifyBtn) verifyBtn.addEventListener("click", () => openVerifyModal());
+      const renameBtn = document.getElementById("btn-rename");
+      if (renameBtn) renameBtn.addEventListener("click", () => openRenameModal());
 
       // 管理员入口（幂等）
       if (profile && profile.is_admin && !adminLink) {
@@ -144,7 +161,7 @@
           <button type="button" class="tab" data-mode="signup">注册</button>
         </div>
         <form class="modal-form" id="auth-form">
-          <label>邮箱<input type="email" id="f-email" required placeholder="you@example.com" autocomplete="email"></label>
+          <label>邮箱或昵称<input type="text" id="f-email" required placeholder="you@example.com 或 昵称" autocomplete="username"></label>
           <label>昵称<span class="only-signup">（用于展示）</span><input type="text" id="f-nick" class="only-signup" placeholder="如：星尘" maxlength="20"></label>
           <label>学号<span class="only-signup">（在校学生必填）</span><input type="text" id="f-sid" class="only-signup" placeholder="学号，如 27xxxx08" maxlength="20" autocomplete="off"></label>
           <label>姓名<span class="only-signup">（须与在校名册一致）</span><input type="text" id="f-real" class="only-signup" placeholder="真实姓名" maxlength="20" autocomplete="off"></label>
@@ -307,7 +324,8 @@
             errEl.hidden = false;
           }
         } else {
-          await SB.signIn(email, pass);
+          const account = await resolveAccount(email);
+          await SB.signIn(account, pass);
           closeModal();
           await render();
         }
@@ -394,6 +412,79 @@
       } catch (err) {
         submit.disabled = false;
         submit.textContent = "提交认证";
+        errEl.textContent = friendlyAuthError(err.message) || String(err.message || "操作失败，请重试");
+        errEl.hidden = false;
+      }
+    });
+  }
+
+  // 修改昵称弹窗：全站唯一（不区分大小写），7 天内仅可修改一次（RPC change_nickname 服务端校验）
+  function openRenameModal() {
+    if (modalEl) modalEl.remove();
+    modalEl = document.createElement("div");
+    modalEl.className = "modal-mask";
+    modalEl.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <button class="modal-close" type="button" aria-label="关闭">✕</button>
+        <div class="modal-tabs"><button type="button" class="tab active">修改昵称</button></div>
+        <form class="modal-form" id="rename-form">
+          <p class="form-note">昵称全站唯一（不区分大小写），7 天内仅可修改一次。</p>
+          <label>新昵称<input type="text" id="r-new" required maxlength="20" placeholder="新昵称（≤20 字）" autocomplete="off"></label>
+          <p class="form-err" id="r-err" hidden></p>
+          <button class="btn" type="submit" id="r-submit">确认修改</button>
+        </form>
+      </div>`;
+    document.body.appendChild(modalEl);
+    if (modalEl.querySelector(".modal-close")) {
+      modalEl.querySelector(".modal-close").addEventListener("click", closeModal);
+    }
+    modalEl.addEventListener("click", (e) => {
+      if (e.target === modalEl) closeModal();
+    });
+    modalEl.querySelector("#rename-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const nick = document.getElementById("r-new").value.trim();
+      const errEl = document.getElementById("r-err");
+      const submit = document.getElementById("r-submit");
+      errEl.hidden = true;
+      if (!nick) {
+        errEl.textContent = "请输入新昵称";
+        errEl.hidden = false;
+        return;
+      }
+      submit.disabled = true;
+      submit.textContent = "提交中…";
+      try {
+        const r = await SB.rpc("change_nickname", { p_new_nickname: nick });
+        closeModal();
+        if (r && r.ok) {
+          // 同步本地资料缓存，界面即时生效
+          try {
+            const cached = JSON.parse(localStorage.getItem(PROFILE_KEY) || "null");
+            if (cached) {
+              cached.nickname = r.nickname || nick;
+              localStorage.setItem(PROFILE_KEY, JSON.stringify(cached));
+            }
+          } catch (e) { /* 忽略缓存同步失败 */ }
+          showToast(r.unchanged ? "昵称未变化" : `昵称已修改为「${r.nickname || nick}」`, "ok");
+        } else {
+          const reason = r && r.reason;
+          const msg =
+            reason === "taken"
+              ? "该昵称已被占用，请更换"
+              : reason === "too_soon"
+                ? `7 天内仅可修改一次昵称，请于 ${(r && r.next_allowed) || "一周后"} 再试`
+                : reason === "invalid"
+                  ? "昵称需为 1~20 个字符"
+                  : reason === "not_found"
+                    ? "账号不存在，请重新登录"
+                    : "修改失败，请重试";
+          showToast(msg, "error");
+        }
+        await render();
+      } catch (err) {
+        submit.disabled = false;
+        submit.textContent = "确认修改";
         errEl.textContent = friendlyAuthError(err.message) || String(err.message || "操作失败，请重试");
         errEl.hidden = false;
       }
