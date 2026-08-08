@@ -2477,3 +2477,168 @@ html[data-style="retro"][data-theme="light"] .sf-style-select:hover {
   .submit-cover { flex: 0 0 100%; height: 6.5rem; }
   .submit-item .c-actions { width: 100%; }
 }
+
+/* ============================================
+   显示设置面板（common.js 注入的 .settings-pop）
+   ============================================ */
+.settings-pop {
+  position: fixed;
+  top: 4.1rem;
+  right: 1rem;
+  z-index: 1000;
+  width: 18rem;
+  max-width: calc(100vw - 2rem);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-glow), 0 24px 70px -20px rgba(0, 0, 0, 0.65);
+  padding: 0.85rem 1rem 0.95rem;
+  font-family: var(--font);
+  backdrop-filter: blur(8px);
+}
+.settings-title {
+  font-family: var(--font-retro);
+  font-size: 0.66rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.55rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dashed var(--border);
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.55rem 0;
+}
+.settings-row + .settings-row { border-top: 1px solid var(--border); }
+.settings-label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--text);
+  line-height: 1.3;
+}
+.settings-desc {
+  display: block;
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  line-height: 1.45;
+  margin-top: 0.15rem;
+}
+/* 复古拨杆开关 */
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.6rem;
+  height: 1.4rem;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.25s, border-color 0.25s;
+  outline: none;
+}
+.switch::before {
+  content: "";
+  position: absolute;
+  top: 0.16rem;
+  left: 0.16rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: transform 0.25s, background 0.25s;
+}
+.switch:checked { background: var(--accent); border-color: var(--accent); }
+.switch:checked::before { transform: translateX(1.2rem); background: #1a0f00; }
+.switch:disabled { opacity: 0.35; cursor: not-allowed; }
+.switch:focus-visible { box-shadow: 0 0 0 3px rgba(232, 177, 76, 0.25); }
+/* 设置按钮激活态 */
+.icon-btn#ui-settings.active {
+  border-color: var(--accent);
+  background: var(--surface-hover);
+  box-shadow: 0 0 0 3px rgba(232, 177, 76, 0.18);
+}
+
+/* ============================================
+   极简版（html.minimal）：无图片、纯文字排版
+   通过覆盖既有规则实现，兼容 data-style / data-theme 组合
+   ============================================ */
+/* 背景：移除星云、星点、噪点、扫描线 */
+html.minimal body::before,
+html.minimal body::after { display: none; }
+
+/* 英雄区：移除生成背景图与全部装饰层 */
+html.minimal .hero::before,
+html.minimal .hero-rays,
+html.minimal .hero-orbit,
+html.minimal .hero-coord,
+html.minimal .armillary-stage { display: none !important; }
+
+html.minimal .hero {
+  padding: clamp(3rem, 8vw, 5rem) 1.25rem clamp(2.5rem, 5vw, 3.5rem);
+  margin-bottom: 2.5rem;
+}
+html.minimal .hero-inner { text-align: left; max-width: 62rem; }
+html.minimal .hero-badge {
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  animation: none;
+}
+html.minimal .badge-dot { display: none; }
+html.minimal .hero h1 { animation: none; }
+html.minimal .hero h1 .grad {
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  color: var(--text);
+}
+html.minimal .hero p {
+  margin-left: 0;
+  margin-right: 0;
+  color: var(--text-dim);
+  animation: none;
+}
+html.minimal .hero-cta { justify-content: flex-start; animation: none; }
+html.minimal .hero-scroll { display: none; }
+
+/* 卡片：去掉封面图 / 光斑 / 角标 / 位移动画，退化为列表条目 */
+html.minimal .card-cover,
+html.minimal .detail-cover,
+html.minimal .submit-cover,
+html.minimal .card-cover::before,
+html.minimal .card-cover::after { display: none !important; }
+
+html.minimal .card {
+  border-radius: 4px;
+  animation: none;
+}
+html.minimal .card::before,
+html.minimal .card::after { display: none; }
+html.minimal .card:hover { transform: none; }
+html.minimal .card-body { padding: 0.9rem 0 1.1rem; }
+html.minimal .card-body h3 {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+html.minimal .card-body p { -webkit-line-clamp: 2; }
+html.minimal .card-meta { font-family: var(--font-mono); }
+
+/* 详情页 */
+html.minimal .detail-title { font-family: var(--font-mono); font-weight: 500; }
+html.minimal .detail-body {
+  background: none;
+  border-radius: 4px;
+}
+
+/* 投稿封面预览图 */
+html.minimal img.s-prev { display: none !important; }
+
+/* 页脚装饰水印 */
+html.minimal .footer::before { display: none; }

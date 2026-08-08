@@ -17,6 +17,8 @@
   ];
   const THEME_KEY = "wzsf-theme";
   const STYLE_KEY = "wzsf-style";
+  const MINIMAL_KEY = "wzsf-minimal";
+  const ARMILLARY_KEY = "wzsf-armillary";
 
   // 四套 SF 风格：黄铜星图（复古未来）/ 赛博霓虹（Cyberpunk 2077）/ 深空极光（原版深空）/ 复古计算（CRT 终端）
   const STYLES = [
@@ -31,6 +33,10 @@
     const savedStyle = localStorage.getItem(STYLE_KEY);
     if (savedStyle && STYLES.some((s) => s.id === savedStyle)) {
       document.documentElement.setAttribute("data-style", savedStyle);
+    }
+    // 首帧前应用极简模式（无图片 / 纯文字排版）
+    if (localStorage.getItem(MINIMAL_KEY) === "1") {
+      document.documentElement.classList.add("minimal");
     }
   } catch (e) { /* 忽略 */ }
 
@@ -57,6 +63,7 @@
             <select class="sf-style-select" id="style-select" aria-label="选择SF风格">
               ${STYLES.map((s) => `<option value="${s.id}">${s.icon} ${s.name}</option>`).join("")}
             </select>
+            <button type="button" class="icon-btn" id="ui-settings" aria-label="显示设置" title="显示设置">⚙</button>
             <button type="button" class="icon-btn" id="theme-toggle" aria-label="切换日/夜模式">切换</button>
             <form class="nav-search" id="nav-search" role="search" action="search.html" method="get">
               <input type="search" name="q" placeholder="搜索…" aria-label="站内搜索" autocomplete="off">
@@ -138,5 +145,87 @@
         toggle.setAttribute("aria-expanded", String(open));
       });
     }
+
+    // ---------- 显示设置：极简版 / 浑天仪开关 ----------
+    function minimalOn() {
+      try { return localStorage.getItem(MINIMAL_KEY) === "1"; } catch (e) { return false; }
+    }
+    function armillaryOn() {
+      try { return localStorage.getItem(ARMILLARY_KEY) !== "0"; } catch (e) { return true; }
+    }
+    function injectSettings() {
+      if (document.getElementById("settings-pop")) return;
+      const hasArm = !!document.querySelector("#armillary");
+      const pop = document.createElement("div");
+      pop.className = "settings-pop";
+      pop.id = "settings-pop";
+      pop.hidden = true;
+      pop.setAttribute("role", "dialog");
+      pop.setAttribute("aria-label", "显示设置");
+      pop.innerHTML = `
+        <div class="settings-title">显示设置</div>
+        <div class="settings-row">
+          <label for="minimal-switch">
+            <span class="settings-label">极简版</span>
+            <span class="settings-desc">隐藏图片与装饰，纯文字排版</span>
+          </label>
+          <input type="checkbox" id="minimal-switch" class="switch">
+        </div>
+        ${hasArm ? `
+        <div class="settings-row" id="armillary-row">
+          <label for="armillary-switch">
+            <span class="settings-label">浑天仪动画</span>
+            <span class="settings-desc">首页标题下方的三维动画</span>
+          </label>
+          <input type="checkbox" id="armillary-switch" class="switch">
+        </div>` : ""}
+      `;
+      document.body.appendChild(pop);
+
+      const minSwitch = pop.querySelector("#minimal-switch");
+      const armSwitch = pop.querySelector("#armillary-switch");
+      const syncArmDisabled = () => {
+        if (!armSwitch) return;
+        const on = document.documentElement.classList.contains("minimal");
+        armSwitch.disabled = on;
+        armSwitch.classList.toggle("disabled", on);
+      };
+
+      if (minSwitch) {
+        minSwitch.checked = minimalOn();
+        minSwitch.addEventListener("change", () => {
+          const on = minSwitch.checked;
+          try { localStorage.setItem(MINIMAL_KEY, on ? "1" : "0"); } catch (e) { /* 忽略 */ }
+          document.documentElement.classList.toggle("minimal", on);
+          syncArmDisabled();
+          window.dispatchEvent(new CustomEvent("wzsf:minimal", { detail: { on } }));
+        });
+      }
+      if (armSwitch) {
+        armSwitch.checked = armillaryOn();
+        armSwitch.addEventListener("change", () => {
+          const on = armSwitch.checked;
+          try { localStorage.setItem(ARMILLARY_KEY, on ? "1" : "0"); } catch (e) { /* 忽略 */ }
+          window.dispatchEvent(new CustomEvent("wzsf:armillary", { detail: { on } }));
+        });
+      }
+      syncArmDisabled();
+
+      const btn = document.getElementById("ui-settings");
+      if (btn) {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          pop.hidden = !pop.hidden;
+          btn.classList.toggle("active", !pop.hidden);
+        });
+        document.addEventListener("click", (e) => {
+          if (!pop.hidden && !pop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+            pop.hidden = true;
+            btn.classList.remove("active");
+          }
+        });
+      }
+    }
+    injectSettings();
   });
 })();

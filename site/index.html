@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -21,7 +21,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="css/style.css?v=12">
+  <link rel="stylesheet" href="css/style.css?v=13">
   <script type="importmap">
     {
       "imports": {
@@ -81,7 +81,7 @@
   <script src="js/supabase.js?v=6"></script>
   <script src="js/auth.js?v=2"></script>
 
-  <!-- 五环浑天仪 · 英雄区背景层（随 SF 风格切换配色） -->
+  <!-- 五环浑天仪 · 英雄区背景层（随 SF 风格切换配色，可在显示设置中勾选开启） -->
   <script type="module">
     const stage = document.getElementById("armillary");
     let armillary = null;
@@ -91,9 +91,15 @@
       const s = document.documentElement.getAttribute("data-style") || "brass";
       return VALID_STYLES.includes(s) ? s : "brass";
     }
+    function armillaryOn() {
+      try { return localStorage.getItem("wzsf-armillary") !== "0"; } catch (e) { return true; }
+    }
+    function minimalOn() {
+      return document.documentElement.classList.contains("minimal");
+    }
 
     async function mountArmillary() {
-      if (!stage) return;
+      if (!stage || !armillaryOn() || minimalOn()) return;
       if (armillary) {
         try { armillary.dispose(); } catch (e) { /* 忽略 */ }
         armillary = null;
@@ -111,8 +117,23 @@
         stage.classList.add("arm-failed");
       }
     }
+    function unmountArmillary() {
+      if (armillary) {
+        try { armillary.dispose(); } catch (e) { /* 忽略 */ }
+        armillary = null;
+        window.__armillary = null;
+      }
+    }
 
     window.addEventListener("wzsf:style", mountArmillary);
+    window.addEventListener("wzsf:armillary", () => {
+      if (armillaryOn() && !minimalOn()) mountArmillary();
+      else unmountArmillary();
+    });
+    window.addEventListener("wzsf:minimal", () => {
+      if (minimalOn()) unmountArmillary();
+      else mountArmillary();
+    });
     mountArmillary();
   </script>
   <script>
