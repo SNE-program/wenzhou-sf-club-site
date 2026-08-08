@@ -7,6 +7,8 @@
 
 ✅ **进程 #21 作品管理 + 警告邮件（站规第四十一条补齐）**：对照站规诊断出"无法快速执行"的管理员操作后实施。① 新增 `site/admin-works.html` 作品管理页（admin.html 加入口）：列出全部作品（标题/作者/分类/摘要/发布状态标签），可**上架/下架**（改 Notion「发布状态」列，前台列表与静态文章页约 5 分钟内自动隐藏/恢复）与**删除**（Notion 归档，不可恢复）。② Notion 作品库加「发布状态」select 列（已上架/已下架）；`gen-site-data.mjs` + `worker/src/index.js` 的 mapWork 输出 status 并过滤已下架；`gen-article-pages.mjs` 生成时清理孤儿文章页（下架作品的静态页随之移除）。③ 新增 `site/admin-users.html` 的**警告**按钮（邮件提醒 + `profiles.warning_count` 计数）：调 `admin-warning` Edge Function 向目标用户发警告邮件（Resend，样式同审核邮件），警告次数在人员列表显示"警告×N"。**待部署**：`works-admin`/`admin-warning` 两个 Edge Function 需在 Supabase Dashboard 手动部署（粘贴 `scripts/works-admin.ts`/`scripts/admin-warning.ts`，前者需 `NOTION_TOKEN`，后者复用 `RESEND_API_KEY`/`RESEND_FROM`）；Worker 的 mapWork 过滤改动需重新 `wrangler deploy` 生效。**待推送**：本次改动未提交（见 git status）。《冰血》已在 Notion 标记「已下架」（验证用），待用户确认是否保留。
 
+> ✅ **部署更新（用户操作后）**：两个 Edge Function 已由用户部署并实测通过——`works-admin` GET 以管理员 JWT 返回 4 篇作品（全「已上架」）200；`admin-warning` 空参数返回 400「缺少参数 target_uid/reason」证明 RESEND_API_KEY 已配置。代码已推送 main（`d478816` + `cb51fbd`，走 `140.82.116.3` 可达），GitHub Pages 自动部署完成：`wzmssf.club/admin-works.html` 200（含新功能）、works.json 4 条全「已上架」、冰血文章页 200。**注意**：Worker 源码虽已含 status 过滤，但本次未重新 `wrangler deploy`——本地 gen-site-data 已生成正确静态数据，线上由 GitHub Pages 静态数据驱动，功能不受影响；下次重部署 Worker 时该改动会自动生效。
+
 ✅ **进程 #20 人员管理后台**：新增 `site/admin-users.html` 人员管理页（admin.html 顶部加入口），管理员可对账户执行 **禁言**（muted：禁止评论/表态/举报）、**封禁**（banned：禁止登录互动 + 该邮箱禁止重新注册）、**踢出**（admin_delete_user 删除账户，允许重新注册入站），禁言/封禁可撤销、踢出不可撤销；管理员账号无操作按钮（仅命令工具 `scripts/promote-admin.mjs` / `scripts/revoke-admin.mjs` 添加/移除）。实现：`profiles` 增 `muted`/`banned` 列；新建 `banned` 封禁邮箱表（RLS 开启无策略，仅安全定义者 RPC 可访问）；注册触发器 `handle_new_user` 拦截封禁邮箱 INSERT auth.users；互动守卫触发器 `guard_interaction`（comments/votes/reports 需 approved+未禁言+未封禁）；`guard_profile_update` 保护 muted/banned 字段（非管理员只许改昵称）；RPC `admin_delete_user`/`admin_set_banned`/`check_email_banned`（前两者仅 authenticated+管理员可调，权限已 REVOKE 收紧）。前端 `supabase.js` 新增 `rpc()`；`auth.js` 加载 muted/banned、封禁用户登录即强制登出、注册前预检封禁邮箱；`article.js` 评论/表态/举报/编辑/删除 6 处禁言封禁拦截。迁移脚本 `scripts/user-manage-setup.mjs`（幂等，独立于已过时的 supabase-setup.mjs）。**已推送 main**（见本轮工作表，commit 号见 git log）。**说明：GoTrue 对已存在邮箱的 signup 会短路返回已有用户（不新建账户），封禁邮箱的最终防线是 DB 触发器 RAISE（已实测有效），前端预检为第一道体验层拦截。**
 
 ✅ **进程 #18/19 正文 Markdown 渲染 + Word 附件一键转 Markdown + 投稿 20000 字**（见下方记录，均已上线）。
@@ -39,8 +41,8 @@
 | 警告邮件 | `scripts/admin-warning.ts`：管理员校验 → 读目标 profile → Resend 发警告邮件 → `warning_count+1`；`user-manage-setup.mjs` profiles 加 `warning_count int DEFAULT 0`（已线上执行）；`admin-users.html` 加警告按钮 + "警告×N"标签 | ✅ 代码完成（待部署） |
 | 核心链路验证 | `_tmp_works_sim.mjs` down《冰血》→ Notion 200 → 本地 gen-site-data → works.json 3 条、不含《冰血》、每条含 status 字段 | ✅ 实测通过 |
 | 语法检查 | gen-site-data / gen-article-pages / user-manage-setup `node --check` 通过；admin-works/admin-users 内联脚本 `new Function` OK | ✅ |
-| 提交推送 | 本次改动**未提交未推送**（待用户确认 + 部署后再推） | ⏳ |
-| 部署说明 | 两个 Edge Function（works-admin / admin-warning）+ Worker 重新部署需用户 Dashboard 操作 | ⏳ 见当前状态 |
+| 提交推送 | 已推送 main：`d478816`（功能）+ `cb51fbd`（冰血恢复上架、状态归一）；push 走 `140.82.116.3` 可达；GitHub Pages 自动部署完成（线上实测 admin-works.html 200、works.json 4 条全已上架） | ✅ 已推送已上线 |
+| 部署说明 | 两个 Edge Function 已由用户部署并实测通过（works-admin 200 列表 / admin-warning 参数校验 400）；Worker 本次未重部署（静态数据已正确，功能不受影响，下次 wrangler deploy 自动生效） | ✅ 已部署 |
 
 ### 本轮（自动化 AI 进程 #20）工作
 | 项 | 内容 | 结果 |
