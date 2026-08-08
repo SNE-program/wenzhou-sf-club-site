@@ -44,7 +44,7 @@
     }, 7000);
   }
 
-  // 读取当前用户资料（status / is_admin / nickname），带本地缓存
+  // 读取当前用户资料（status / is_admin / nickname / real_name），带本地缓存
   async function loadProfile() {
     const user = SB.user();
     if (!user) {
@@ -57,7 +57,14 @@
         `user_id=eq.${user.id}&select=user_id,nickname,status,is_admin,muted,banned`
       );
       const p = rows[0] || null;
-      if (p) localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+      if (p) {
+        // 实名信息存于 student_verifications，经公开视图 profile_names 读取（仅已核验学生返回）
+        try {
+          const pn = await SB.get("profile_names", `user_id=eq.${user.id}&select=user_id,nickname,real_name`);
+          if (pn && pn[0]) p.real_name = pn[0].real_name || null;
+        } catch (e) { /* 实名读取失败不影响主流程 */ }
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+      }
       return p;
     } catch (e) {
       try {
@@ -100,13 +107,16 @@
             : ""
         : "";
       area.innerHTML = `
-        <span class="auth-user" title="${esc(user.email || "")}">${esc(nick)}</span>
+        <span class="auth-user" title="${esc(user.email || "")}">${esc(nick)}${profile && profile.real_name ? `<span class="c-real">${esc(profile.real_name)}</span>` : ""}</span>
         ${tag}
+        ${!profile.real_name ? `<button class="auth-btn" type="button" id="btn-verify" title="在校学生可凭学号姓名通过名册自动核验">实名认证</button>` : ""}
         <button class="auth-btn" type="button" id="btn-logout">退出</button>`;
       document.getElementById("btn-logout").addEventListener("click", async () => {
         await SB.signOut();
         await render();
       });
+      const verifyBtn = document.getElementById("btn-verify");
+      if (verifyBtn) verifyBtn.addEventListener("click", () => openVerifyModal());
 
       // 管理员入口（幂等）
       if (profile && profile.is_admin && !adminLink) {
@@ -136,12 +146,14 @@
         <form class="modal-form" id="auth-form">
           <label>邮箱<input type="email" id="f-email" required placeholder="you@example.com" autocomplete="email"></label>
           <label>昵称<span class="only-signup">（用于展示）</span><input type="text" id="f-nick" class="only-signup" placeholder="如：星尘" maxlength="20"></label>
+          <label>学号<span class="only-signup">（在校学生必填）</span><input type="text" id="f-sid" class="only-signup" placeholder="学号，如 27xxxx08" maxlength="20" autocomplete="off"></label>
+          <label>姓名<span class="only-signup">（须与在校名册一致）</span><input type="text" id="f-real" class="only-signup" placeholder="真实姓名" maxlength="20" autocomplete="off"></label>
           <label>密码<span class="pass-wrap"><input type="password" id="f-pass" required placeholder="至少 6 位" autocomplete="new-password"><button type="button" class="pass-toggle" data-target="f-pass" aria-pressed="false" aria-label="显示密码" title="显示/隐藏密码"><svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></span></label>
           <label>确认密码<span class="only-signup">（再次输入）</span><span class="pass-wrap only-signup"><input type="password" id="f-pass2" placeholder="再次输入密码" autocomplete="new-password"><button type="button" class="pass-toggle" data-target="f-pass2" aria-pressed="false" aria-label="显示密码" title="显示/隐藏密码"><svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></span></label>
           <p class="form-err" id="f-err" hidden></p>
           <div class="rules-consent only-signup" id="rules-consent" hidden>
             <p class="rules-consent-title">注册前请阅读《网站站规》</p>
-            <p class="rules-consent-body">一个邮箱仅可注册一个账号；注册后需完成邮箱验证并等待管理员审核；评论须文明友善，每人每篇限 1 条（≤1200 字）；投稿须为原创或已获授权；作品将按 CC BY-SA 4.0 公开展示。完整条款见<a href="rules.html" target="_blank" rel="noopener">《网站站规》全文</a>。</p>
+            <p class="rules-consent-body">一个邮箱仅可注册一个账号；在校学生填写学号与姓名将经学校名册自动核验（学号不公开、实名仅以笔名为主弱化展示），非在校用户由管理员人工审核；评论须文明友善，每人每篇限 1 条（≤1200 字）；投稿须为原创或已获授权；作品将按 CC BY-SA 4.0 公开展示。完整条款见<a href="rules.html" target="_blank" rel="noopener">《网站站规》全文</a>。</p>
             <label class="rules-consent-check">
               <input type="checkbox" id="f-agree">
               <span>我已阅读并同意《网站站规》</span>
@@ -155,7 +167,7 @@
             <button class="btn" type="button" id="r-send">发送重置链接</button>
             <button class="btn ghost" type="button" id="r-back">返回登录</button>
           </div>
-          <p class="form-note">仅记录邮箱与昵称，不采集真实姓名、学号或手机号。注册后需完成邮箱验证并经管理员审核，通过后方可评论、表态。</p>
+          <p class="form-note">在校学生请填写学号与姓名，注册后自动与在校名册核验，匹配即免人工审核；非在校用户可留空，由管理员人工审核。实名仅用于身份核验，公开区以笔名为主展示，学号不公开。</p>
           <p class="form-link"><a href="#" id="f-forgot">忘记密码？</a></p>
         </form>
       </div>`;
@@ -254,6 +266,8 @@
       const pass = document.getElementById("f-pass").value;
       const pass2 = document.getElementById("f-pass2").value;
       const nick = document.getElementById("f-nick").value.trim();
+      const sid = document.getElementById("f-sid").value.trim();
+      const real = document.getElementById("f-real").value.trim();
       const errEl = document.getElementById("f-err");
       const submit = document.getElementById("f-submit");
       const isSignup = document.querySelector(".tab.active").dataset.mode === "signup";
@@ -267,6 +281,9 @@
           if (pass !== pass2) throw new Error("两次输入的密码不一致");
           if (!document.getElementById("f-agree").checked)
             throw new Error("请先阅读并勾选同意《网站站规》");
+          // 学号/姓名需同时填写或同时留空（留空=非学生，走人工审核）
+          if ((sid || real) && (!sid || !real)) throw new Error("填写学号时须同时填写姓名");
+          if (sid && !/^\d+$/.test(sid)) throw new Error("学号应为数字");
           // 封禁邮箱预检（尽力而为；失败时由数据库注册触发器兜底拦截）
           try {
             const emailBlocked = await SB.rpc("check_email_banned", { check_email: email });
@@ -274,14 +291,19 @@
           } catch (e) {
             if (e.message === "该邮箱已被封禁，无法注册") throw e;
           }
-          const data = await SB.signUp(email, pass, nick || "星尘");
+          const data = await SB.signUp(
+            email, pass, nick || "星尘",
+            sid ? { student_id: sid, real_name: real } : {}
+          );
           if (data.session) {
             // 未开启邮箱确认时的自动登录（保留兼容）
             closeModal();
             await render();
           } else {
             errEl.className = "form-ok";
-            errEl.textContent = "注册成功！验证邮件已发送至你的邮箱，请点击邮件中的链接完成验证，再返回登录。";
+            errEl.textContent = sid
+              ? "注册成功！验证邮件已发送至你的邮箱，请点击邮件中的链接完成验证。在校学生将自动与名册核验，匹配即免人工审核。"
+              : "注册成功！验证邮件已发送至你的邮箱，请点击邮件中的链接完成验证，再返回登录等待管理员审核。";
             errEl.hidden = false;
           }
         } else {
@@ -312,6 +334,72 @@
     }
   }
 
+  // 实名认证补录 / 修正重试弹窗：在校学生凭学号+姓名经名册自动核验（RPC verify_student）
+  function openVerifyModal() {
+    if (modalEl) modalEl.remove();
+    modalEl = document.createElement("div");
+    modalEl.className = "modal-mask";
+    modalEl.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <button class="modal-close" type="button" aria-label="关闭">✕</button>
+        <div class="modal-tabs"><button type="button" class="tab active">实名认证</button></div>
+        <form class="modal-form" id="verify-form">
+          <p class="form-note">在校学生填写学号与姓名，系统将自动与在校名册核验：匹配即通过审核并展示实名（公开区仍以笔名为主），学号不公开。非在校用户无需认证，可联系管理员人工审核。</p>
+          <label>学号<input type="text" id="v-sid" required maxlength="20" placeholder="学号，如 27xxxx08" autocomplete="off"></label>
+          <label>姓名<input type="text" id="v-real" required maxlength="20" placeholder="与在校名册一致的姓名" autocomplete="off"></label>
+          <p class="form-err" id="v-err" hidden></p>
+          <button class="btn" type="submit" id="v-submit">提交认证</button>
+        </form>
+      </div>`;
+    document.body.appendChild(modalEl);
+    if (modalEl.querySelector(".modal-close")) {
+      modalEl.querySelector(".modal-close").addEventListener("click", closeModal);
+    }
+    modalEl.addEventListener("click", (e) => {
+      if (e.target === modalEl) closeModal();
+    });
+    modalEl.querySelector("#verify-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const sid = document.getElementById("v-sid").value.trim();
+      const real = document.getElementById("v-real").value.trim();
+      const errEl = document.getElementById("v-err");
+      const submit = document.getElementById("v-submit");
+      errEl.hidden = true;
+      if (!sid || !real) {
+        errEl.textContent = "请同时填写学号与姓名";
+        errEl.hidden = false;
+        return;
+      }
+      if (!/^\d+$/.test(sid)) {
+        errEl.textContent = "学号应为数字";
+        errEl.hidden = false;
+        return;
+      }
+      submit.disabled = true;
+      submit.textContent = "认证中…";
+      try {
+        const r = await SB.rpc("verify_student", { p_student_id: sid, p_real_name: real });
+        closeModal();
+        if (r && r.ok) {
+          showToast(`实名认证通过！你好，${r.real_name || ""}`, "ok");
+        } else {
+          const reason = r && r.reason;
+          const msg =
+            reason === "claimed"
+              ? "该学号已被其他账号绑定，请联系管理员核实"
+              : "未在在校名册中核验通过，请核对学号与姓名；校外用户可联系管理员人工审核";
+          showToast(msg, "error");
+        }
+        await render();
+      } catch (err) {
+        submit.disabled = false;
+        submit.textContent = "提交认证";
+        errEl.textContent = friendlyAuthError(err.message) || String(err.message || "操作失败，请重试");
+        errEl.hidden = false;
+      }
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     const links = document.querySelector("#nav-links");
     if (!links) return;
@@ -326,7 +414,7 @@
             msg = "验证未通过：" + r.error + "。请重新操作，或联系管理员。";
             kind = "error";
           } else if (r.type === "signup" && r.loggedIn) {
-            msg = "邮箱验证成功！你的账号已提交管理员审核，通过后即可正常使用。";
+            msg = "邮箱验证成功！在校学生将自动完成名册核验，非在校用户请等待管理员审核。";
           } else if (r.loggedIn) {
             msg = "验证成功。";
           }

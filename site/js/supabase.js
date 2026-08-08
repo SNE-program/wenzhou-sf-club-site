@@ -78,13 +78,14 @@ const SB = {
   },
 
   // ---- Auth ----
-  async signUp(email, password, nickname) {
+  // extra：可选的附加 user_metadata（如 { student_id, real_name }，供实名名册自动核验）
+  async signUp(email, password, nickname, extra = {}) {
     // redirect_to：让验证邮件里的链接跳回当前站点（线上/本地测试均正确）。
     // 需在控制台 Authentication→URL Configuration 的 Additional Redirect URLs 放行本地测试地址。
     const redirect_to = location.origin + location.pathname;
     const data = await this.request("/auth/v1/signup", {
       method: "POST",
-      body: JSON.stringify({ email, password, data: { nickname }, redirect_to }),
+      body: JSON.stringify({ email, password, data: { nickname, ...extra }, redirect_to }),
     });
     if (data.session) {
       this.saveSession(data.session);

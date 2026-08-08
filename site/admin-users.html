@@ -15,7 +15,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="css/style.css?v=18">
+  <link rel="stylesheet" href="css/style.css?v=19">
   <style>
     .um-item { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: 0.8rem 0.2rem; border-bottom: 1px solid var(--border); }
     .um-item:last-child { border-bottom: none; }
@@ -40,7 +40,7 @@
   <main class="container">
     <div class="page-head">
       <h1>人员管理</h1>
-      <div class="sub">禁言（禁止评论）、封禁（禁止登录与重新注册）、踢出（注销账户，可重新入站）、警告（邮件提醒，附警告次数）；禁言、封禁与警告可撤销，踢出不可撤销。管理员账号不受这些操作影响，仅能通过命令工具添加或移除。</div>
+      <div class="sub">禁言（禁止评论）、封禁（禁止登录与重新注册）、踢出（注销账户，可重新入站）、警告（邮件提醒，附警告次数）；禁言、封禁与警告可撤销，踢出不可撤销。实名绑定为在校学生经名册自动核验的标识（学号仅显示脱敏掩码），解绑后回到待审核状态。管理员账号不受这些操作影响，仅能通过命令工具添加或移除。</div>
       <p style="margin-top:1rem"><a class="btn" href="admin.html">入站审核</a> <a class="btn" href="admin-reports.html">举报处理</a> <a class="btn" href="admin-comments.html">评论管理</a> <a class="btn" href="admin-submissions.html">投稿审核</a> <a class="btn" href="admin-works.html">作品管理</a> <a class="btn" href="admin-contests.html">管理竞赛</a></p>
     </div>
 
@@ -53,8 +53,8 @@
 
   <script src="js/common.js?v=8"></script>
   <script src="js/api.js?v=5"></script>
-  <script src="js/supabase.js?v=7"></script>
-  <script src="js/auth.js?v=5"></script>
+  <script src="js/supabase.js?v=8"></script>
+  <script src="js/auth.js?v=6"></script>
   <script>
     const FUNC_URL = `${SB.url}/functions/v1/admin-warning`;
 
@@ -101,8 +101,15 @@
       }
 
       let rows = [];
+      let verifyMap = {};
       async function loadRows() {
         rows = await SB.get("profiles", "select=user_id,nickname,email,status,is_admin,muted,banned,warning_count,created_at&order=is_admin.desc,created_at.asc");
+        // 实名绑定信息经管理员 RPC 读取（学号仅存哈希，页面只展示脱敏掩码与姓名）
+        try {
+          const vrows = await SB.rpc("admin_list_verifications");
+          verifyMap = {};
+          (vrows || []).forEach((v) => { verifyMap[v.user_id] = v; });
+        } catch (e) { verifyMap = {}; }
       }
 
       try {
@@ -131,6 +138,7 @@
               <div class="um-item" data-uid="${u.user_id}">
                 <div class="um-info">
                   <span class="c-nick">${esc(u.nickname || "（无昵称）")}</span>
+                  ${verifyMap[u.user_id] ? `<span class="c-real">${esc(verifyMap[u.user_id].real_name)}（学号 ${esc(verifyMap[u.user_id].display_mask)}）</span>` : ""}
                   <span class="c-time">${esc(u.email || "")}</span>
                   <span class="c-time">注册于 ${esc(timeLabel(u.created_at))}</span>
                   <div class="um-tags">${tags.join("")}</div>
@@ -145,6 +153,7 @@
                       ${u.banned
                         ? `<button class="btn ghost" type="button" data-act="unban">解除封禁</button>`
                         : `<button class="c-btn audit-reject" type="button" data-act="ban">封禁</button>`}
+                      ${verifyMap[u.user_id] ? `<button class="btn ghost" type="button" data-act="unbind">解绑实名</button>` : ""}
                       <button class="btn ghost" type="button" data-act="warn">警告</button>
                       <button class="c-btn audit-reject" type="button" data-act="kick">踢出</button>`}
                 </div>
@@ -183,6 +192,10 @@
             case "kick":
               if (!confirm(`确认踢出「${name}」吗？将注销其账户与全部数据（评论、表态、举报），此操作不可撤销；该邮箱之后可重新注册入站。`)) return;
               await SB.rpc("admin_delete_user", { target_uid: uid });
+              break;
+            case "unbind":
+              if (!confirm(`确认解除「${name}」的实名绑定吗？解除后该用户回到待审核状态，该学号可被重新认领。`)) return;
+              await SB.rpc("admin_unbind_student", { target_uid: uid });
               break;
             case "warn":
               const reason = (prompt(`向「${name}」发送警告邮件。\n填写警告原因（将随邮件发送给该用户）：`, "") || "").trim();

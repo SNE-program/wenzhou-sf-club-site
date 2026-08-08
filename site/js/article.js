@@ -266,14 +266,18 @@
         "comments",
         `article_id=eq.${encodeURIComponent(ARTICLE_ID)}&order=created_at.desc&select=*&status=eq.active`
       );
-      // 加载昵称（公开视图，不暴露邮箱/状态）
+      // 加载昵称（公开视图，不暴露邮箱/状态；已核验学生附带实名）
       const userIds = [...new Set(rows.map((r) => r.user_id))];
       const nickMap = {};
+      const realMap = {};
       if (userIds.length) {
-        const profs = await SB.get("profile_names", `user_id=in.(${userIds.join(",")})&select=user_id,nickname`);
-        profs.forEach((p) => (nickMap[p.user_id] = p.nickname));
+        const profs = await SB.get("profile_names", `user_id=in.(${userIds.join(",")})&select=user_id,nickname,real_name`);
+        profs.forEach((p) => {
+          nickMap[p.user_id] = p.nickname;
+          if (p.real_name) realMap[p.user_id] = p.real_name;
+        });
       }
-      renderComments(rows, nickMap);
+      renderComments(rows, nickMap, realMap);
       refreshCommentForm();
     } catch (e) {
       list.innerHTML = `<div class="state">评论加载失败：${esc(errText(e))}<br><br><button class="btn" type="button" id="c-retry">重试</button></div>`;
@@ -282,7 +286,7 @@
     }
   }
 
-  function renderComments(rows, nickMap) {
+  function renderComments(rows, nickMap, realMap) {
     const list = document.getElementById("c-list");
     const user = SB.user();
     if (!rows.length) {
@@ -292,10 +296,12 @@
     list.innerHTML = rows.map((c) => {
       const mine = user && c.user_id === user.id;
       const nick = (mine ? ((myProfile && myProfile.nickname) || (user.user_metadata && user.user_metadata.nickname)) : "") || nickMap[c.user_id] || "匿名星友";
+      // 实名弱化展示：笔名为主，实名小号、低对比度（仅已核验学生）
+      const real = (mine ? (myProfile && myProfile.real_name) : "") || realMap[c.user_id] || "";
       return `
         <div class="comment-item" data-id="${c.id}">
           <div class="c-head">
-            <span class="c-nick">${esc(nick)}</span>
+            <span class="c-nick">${esc(nick)}${real ? `<span class="c-real">${esc(real)}</span>` : ""}</span>
             <span class="c-time">${esc(timeLabel(c.created_at))}</span>
             ${c.edited_at ? `<span class="c-edited">已编辑</span>` : ""}
           </div>

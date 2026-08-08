@@ -1329,6 +1329,8 @@ html[data-theme="light"] .detail-body pre code { color: #2d2a24; }
   font-size: 0.85rem;
 }
 .c-nick { color: var(--accent); font-weight: 600; }
+/* 实名弱化展示：笔名为主，实名小号、低对比度 */
+.c-real { margin-left: 0.4em; font-size: 0.82em; font-weight: 400; opacity: 0.55; color: inherit; }
 .c-time { color: var(--text-dim); }
 .c-edited { color: var(--text-dim); font-size: 0.78rem; }
 .c-content {
