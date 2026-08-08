@@ -115,8 +115,8 @@
         <form class="modal-form" id="auth-form">
           <label>邮箱<input type="email" id="f-email" required placeholder="you@example.com" autocomplete="email"></label>
           <label>昵称<span class="only-signup">（用于展示）</span><input type="text" id="f-nick" class="only-signup" placeholder="如：星尘" maxlength="20"></label>
-          <label>密码<input type="password" id="f-pass" required placeholder="至少 6 位" autocomplete="new-password"></label>
-          <label>确认密码<span class="only-signup">（再次输入）</span><input type="password" id="f-pass2" class="only-signup" placeholder="再次输入密码" autocomplete="new-password"></label>
+          <label>密码<span class="pass-wrap"><input type="password" id="f-pass" required placeholder="至少 6 位" autocomplete="new-password"><button type="button" class="pass-toggle" data-target="f-pass" aria-pressed="false" aria-label="显示密码" title="显示/隐藏密码"><svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></span></label>
+          <label>确认密码<span class="only-signup">（再次输入）</span><span class="pass-wrap only-signup"><input type="password" id="f-pass2" placeholder="再次输入密码" autocomplete="new-password"><button type="button" class="pass-toggle" data-target="f-pass2" aria-pressed="false" aria-label="显示密码" title="显示/隐藏密码"><svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></span></label>
           <p class="form-err" id="f-err" hidden></p>
           <button class="btn" type="submit" id="f-submit">登录</button>
           <div id="auth-reset" hidden>
@@ -132,6 +132,19 @@
       </div>`;
     document.body.appendChild(modalEl);
     modalEl.addEventListener("click", (e) => {
+      // 密码可见性切换
+      const tg = e.target.closest(".pass-toggle");
+      if (tg) {
+        const inp = document.getElementById(tg.dataset.target);
+        if (inp) {
+          const show = inp.type === "password";
+          inp.type = show ? "text" : "password";
+          tg.classList.toggle("on", show);
+          tg.setAttribute("aria-pressed", String(show));
+          tg.setAttribute("aria-label", show ? "隐藏密码" : "显示密码");
+        }
+        return;
+      }
       if (e.target === modalEl) closeModal();
     });
     modalEl.querySelector(".modal-close").addEventListener("click", closeModal);

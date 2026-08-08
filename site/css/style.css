@@ -2658,3 +2658,37 @@ html.minimal .footer::before { display: none; }
 @media (max-width: 420px) {
   .nav-tools .sf-style-select { max-width: 5.5rem; }
 }
+
+/* ============================================
+   密码可见性切换（登录/注册弹窗）
+   ============================================ */
+.pass-wrap {
+  position: relative;
+  display: block;
+  margin-top: 0.35rem;
+}
+.pass-wrap input { margin-top: 0; padding-right: 2.5rem; }
+.pass-toggle {
+  position: absolute;
+  right: 0.3rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.9rem;
+  height: 1.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 0;
+  transition: color 0.2s, background 0.2s;
+}
+.pass-toggle:hover { color: var(--text); background: var(--surface-hover); }
+.pass-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pass-toggle svg { width: 1.05rem; height: 1.05rem; }
+.pass-toggle .icon-eye-off { display: none; }
+.pass-toggle.on .icon-eye { display: none; }
+.pass-toggle.on .icon-eye-off { display: block; }
