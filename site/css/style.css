@@ -786,6 +786,18 @@ img { max-width: 100%; display: block; }
   font-size: 0.78rem;
   letter-spacing: 0.08em;
 }
+.footer .foot-link {
+  position: relative;
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--border);
+  padding-bottom: 1px;
+  transition: color 0.2s ease;
+}
+.footer .foot-link:hover {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
 
 /* ---------- 错误页 ---------- */
 .error-page {

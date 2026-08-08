@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -15,7 +15,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="css/style.css?v=16">
+  <link rel="stylesheet" href="css/style.css?v=17">
 </head>
 <body>
   <div data-nav></div>
@@ -23,7 +23,7 @@
   <main class="container">
     <div class="page-head">
       <h1>评论管理</h1>
-      <div class="sub">按文章查看评论，可删除（隐藏）/恢复，或拉黑违规用户。</div>
+      <div class="sub">按文章查看评论，可删除（隐藏，不可恢复）或拉黑违规用户。</div>
       <p style="margin-top:1rem"><a class="btn" href="admin-reports.html">举报处理</a> <a class="btn" href="admin.html">入站审核</a> <a class="btn" href="admin-submissions.html">投稿审核</a> <a class="btn" href="admin-contests.html">管理竞赛</a></p>
     </div>
     <div class="c-toolbar" id="toolbar" hidden>
@@ -50,7 +50,7 @@
 
   <div data-footer></div>
 
-  <script src="js/common.js?v=7"></script>
+  <script src="js/common.js?v=8"></script>
   <script src="js/api.js?v=5"></script>
   <script src="js/supabase.js?v=7"></script>
   <script src="js/auth.js?v=4"></script>
@@ -150,7 +150,7 @@
               <div class="c-actions">
                 ${c.status === "active"
                   ? `<button class="c-btn" data-act="hide" type="button">删除</button>`
-                  : `<button class="c-btn" data-act="restore" type="button">恢复</button>`}
+                  : `<span class="c-time">已删除</span>`}
                 ${!banned && c.user_id !== me.user_id ? `<button class="c-btn" data-act="ban" type="button">拉黑</button>` : ""}
               </div>
             </div>`;
@@ -168,8 +168,6 @@
         if (act === "hide") {
           if (!confirm("删除（隐藏）这条评论？")) return;
           await SB.update("comments", { status: "deleted" }, `id=eq.${id}`);
-        } else if (act === "restore") {
-          await SB.update("comments", { status: "active" }, `id=eq.${id}`);
         } else if (act === "ban") {
           const nick = (profilesById[uid] || {}).nickname || "该用户";
           if (!confirm(`拉黑「${nick}」？\n其评论将全部隐藏，且无法再评论、表态、举报。`)) return;

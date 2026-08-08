@@ -1,0 +1,111 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>站规 · 温州中学科学及幻想文学社</title>
+  <meta name="description" content="温州中学科学及幻想文学社网站站规：账号、评论、表态、举报、投稿、竞赛、知识产权与隐私规范。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="网站站规 · 温州中学科学及幻想文学社">
+  <meta property="og:description" content="读科幻、写幻想、观星象、聊未来。">
+  <meta property="og:image" content="https://sne-program.github.io/wenzhou-sf-club-site/images/og-default.png">
+  <meta property="og:url" content="https://sne-program.github.io/wenzhou-sf-club-site/rules.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=17">
+  <style>
+    .rules-content { max-width: 46rem; font-size: 1.02rem; }
+    .rules-content h1 { font-family: var(--font-display); font-size: 1.5rem; font-weight: 400; margin-bottom: 1.2rem; }
+    .rules-content h2 {
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      font-weight: 400;
+      color: var(--accent);
+      margin: 2rem 0 0.9rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px dashed var(--border);
+    }
+    .rules-content p { margin-bottom: 1.05rem; color: var(--text-dim); line-height: 1.8; }
+    .rules-content strong { color: var(--text); }
+    .rules-content ol { margin: 0 0 1.05rem 1.4rem; padding: 0; color: var(--text-dim); }
+    .rules-content li { margin-bottom: 0.45rem; line-height: 1.8; }
+    .rules-content a { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--border); }
+    .rules-content a:hover { color: var(--text); border-bottom-color: var(--accent); }
+    .rules-content hr { border: none; border-top: 1px dashed var(--border); margin: 1.8rem 0; }
+    .rules-content em { color: var(--text-dim); }
+  </style>
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>网站站规</h1>
+      <div class="sub">温州中学科学及幻想文学社 · 使用本站即视为已知悉并同意本站规</div>
+    </div>
+
+    <div class="rules-content" id="rules">
+      <div class="state"><div class="spinner"></div>正在加载站规……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=8"></script>
+  <script src="js/api.js?v=5"></script>
+  <script src="js/vendor/marked.min.js"></script>
+  <script>
+    (async function () {
+      const root = document.getElementById("rules");
+      try {
+        const res = await fetch("data/rules.md");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const md = await res.text();
+
+        // Markdown → HTML（复用竞赛页的同款渲染与清洗）
+        const parse = window.marked && typeof window.marked.parse === "function" ? window.marked.parse : null;
+        if (parse) {
+          const tpl = document.createElement("template");
+          tpl.innerHTML = parse(md, { breaks: true, gfm: true });
+          // 移除 markdown 顶部大标题与紧跟的分隔线（页头已展示标题）
+          const firstH1 = tpl.content.querySelector("h1");
+          if (firstH1) {
+            let next = firstH1.nextElementSibling;
+            firstH1.remove();
+            if (next && next.tagName === "HR") next.remove();
+          }
+          tpl.content
+            .querySelectorAll("script,iframe,object,embed,style,link,meta,form,input,button,textarea")
+            .forEach((el) => el.remove());
+          tpl.content.querySelectorAll("*").forEach((el) => {
+            for (const a of [...el.attributes]) {
+              const n = a.name.toLowerCase();
+              if (n.startsWith("on") || n === "srcdoc" || (n === "href" && /^\s*javascript:/i.test(a.value))) {
+                el.removeAttribute(a.name);
+              }
+            }
+          });
+          root.innerHTML = tpl.innerHTML;
+        } else {
+          root.innerHTML = md.split(/\n+/).map((s) => s.trim()).filter(Boolean)
+            .map((p) => `<p>${esc(p)}</p>`).join("");
+        }
+      } catch (e) {
+        root.innerHTML = `<div class="state">站规加载失败：${esc(e.message)}<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+      }
+    })().catch((e) => {
+      document.getElementById("rules").innerHTML = `<div class="state">站规加载失败，请稍后刷新重试。</div>`;
+      console.error(e);
+    });
+  </script>
+</body>
+</html>

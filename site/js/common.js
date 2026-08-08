@@ -79,6 +79,7 @@
     return `
       <footer class="footer">
         <div class="foot-brand">温州中学科学及幻想文学社</div>
+        <div><a class="foot-link" href="rules.html">网站站规</a></div>
         <div>以科学与幻想为翼 · © ${year}</div>
       </footer>`;
   }
