@@ -15,7 +15,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="css/style.css?v=15">
+  <link rel="stylesheet" href="css/style.css?v=16">
   <style>
     .um-item { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: 0.8rem 0.2rem; border-bottom: 1px solid var(--border); }
     .um-item:last-child { border-bottom: none; }
@@ -144,7 +144,7 @@
                         : `<button class="btn ghost" type="button" data-act="mute">禁言</button>`}
                       ${u.banned
                         ? `<button class="btn ghost" type="button" data-act="unban">解除封禁</button>`
-                        : `<button class="c-btn" type="button" data-act="ban">封禁</button>`}
+                        : `<button class="c-btn audit-reject" type="button" data-act="ban">封禁</button>`}
                       <button class="btn ghost" type="button" data-act="warn">警告</button>
                       <button class="c-btn audit-reject" type="button" data-act="kick">踢出</button>`}
                 </div>
