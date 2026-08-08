@@ -231,8 +231,11 @@
 | 修复 1 | `scripts/submit-work.ts`：正文写入投稿箱「正文内容」按 2000 分块（`chunkText`） | ✅ 待部署 |
 | 修复 2 | `worker/src/index.js` createWorkPage：「简介」= 200 字摘要（列表卡片用）、「正文」= 完整内容分块；缺「正文」列时降级为「简介」全文 | ✅ 待部署 |
 | 实测验证 | 投稿箱 2874 字分 2 块写入成功、回读 100% 完整；正式库 2643 字 2 块转录成功 + 简介=200 字摘要 | ✅ |
-| 部署 | ⚠️ 需人工：`submit-work` Edge Function（本就未部署）+ Cloudflare Worker `wrangler deploy`；两者都需重新发布新代码 | ⏳ |
-| **遗留人工清理** | ⚠️ Notion API 无法 DELETE database 行（400 invalid_request_url，node fetch 与 curl 均验证）。需人工在 Notion 删除：① 正式作品库标题「【请删除】verify-work-1786123140058」（会同步上线，尽快删）；② 投稿箱标题「chunk-verify-*」已拒绝行（无害，顺手删） | ⚠️ |
+| 部署 | ✅ 已解决：`wrangler deploy` 成功（Version ab56bd71）；`submit-work` Edge Function 已在之前部署（投稿分块生效） | ✅ |
+| 转录验证 | 新投稿《冰血》（6626 字）→ 已通过 → Worker 转录成功（正文 6626 字分块、简介 200 字摘要）→ 状态改「已发布」 | ✅ |
+| 同步上线 | main=fa3fe9c（sync #13/#14 自动触发），**push 事件未触发 deploy.yml**，手动 `workflow_dispatch` 后 Deploy #83 success；gh-pages works.json 5 条（新《冰血》正文 6626 字完整） | ✅ 已上线 |
+| **遗留人工** | ① 正式库有**两条《冰血》**（旧 14:09Z「见附件」+ 新 01:35Z 长文），建议删除旧的，避免作品库重复；② Notion API 无法 DELETE database 行，删除需在 Notion 界面手动操作 | ⚠️ |
+| **经验教训** | GitHub Actions 的 `push` 事件可能不触发 deploy.yml（实测 fa3fe9c push 无新 Deploy run），兜底靠 `*/30` schedule 或手动 `workflow_dispatch`；Worker 的 GH_TOKEN/NOTION_TOKEN/RESEND_API_KEY secret 均在（`wrangler secret list` 确认） | 📌 |
 
 ## 对下一个 AI 的建议
 
