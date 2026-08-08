@@ -22,6 +22,17 @@
     })();
   </script>
   <link rel="stylesheet" href="css/style.css?v=12">
+  <style>
+    /* 竞赛告示（Word 转 Markdown 渲染）排版 */
+    .contest-sec .md h1, .contest-sec .md h2, .contest-sec .md h3 {
+      font-size: 1.05rem; color: var(--text); margin: 0.9rem 0 0.35rem;
+    }
+    .contest-sec .md p { color: var(--text); margin-bottom: 0.6rem; white-space: normal; }
+    .contest-sec .md ul, .contest-sec .md ol { color: var(--text); padding-left: 1.3rem; margin-bottom: 0.6rem; }
+    .contest-sec .md li { margin-bottom: 0.2rem; }
+    .contest-sec .md a { color: var(--accent); }
+    .contest-sec .md strong { color: var(--text); }
+  </style>
 </head>
 <body>
   <div data-nav></div>
@@ -43,9 +54,43 @@
   <script src="js/api.js?v=5"></script>
   <script src="js/supabase.js?v=5"></script>
   <script src="js/auth.js?v=2"></script>
+  <!-- 竞赛告示 Markdown 渲染（marked 不可用时降级为段落） -->
+  <script src="js/vendor/marked.min.js"></script>
   <script>
     (async function () {
       // 投稿走站内投稿页（支持附件上传 + Word 转 Markdown + 自动预选所属竞赛）
+
+      // 简单 XSS 过滤：剥离危险元素与事件属性
+      function sanitizeHtml(html) {
+        try {
+          const tpl = document.createElement("template");
+          tpl.innerHTML = html;
+          tpl.content
+            .querySelectorAll("script,iframe,object,embed,style,link,meta,form,input,button,textarea")
+            .forEach((el) => el.remove());
+          tpl.content.querySelectorAll("*").forEach((el) => {
+            for (const a of [...el.attributes]) {
+              const n = a.name.toLowerCase();
+              if (n.startsWith("on") || n === "srcdoc" || (n === "href" && /^\s*javascript:/i.test(a.value))) {
+                el.removeAttribute(a.name);
+              }
+            }
+          });
+          return tpl.innerHTML;
+        } catch (e) {
+          return String(html).replace(/<[^>]*>/g, "");
+        }
+      }
+
+      // Markdown → HTML（告示内容为管理后台 Word 转出的 Markdown）
+      function renderMarkdown(src) {
+        const md = window.marked && typeof window.marked.parse === "function" ? window.marked.parse : null;
+        const text = String(src == null ? "" : src);
+        if (!md) {
+          return text.split(/\n+/).map((s) => s.trim()).filter(Boolean).map((p) => `<p>${esc(p)}</p>`).join("");
+        }
+        return sanitizeHtml(md(text, { breaks: true, gfm: true }));
+      }
 
       // 优先读 Supabase（在线管理的内容），失败/为空则降级 Notion/本地数据
       async function loadContests() {
@@ -73,6 +118,8 @@
           <div class="contest-meta">
             ${c.deadline ? `<span>⏰ 投稿截止：${esc(c.deadline)}</span>` : ""}
           </div>
+          ${c.notice ? `<div class="contest-sec"><h3>竞赛告示</h3><div class="md">${renderMarkdown(c.notice)}</div></div>` : ""}
+          ${c.attachment_url ? `<p style="margin-top:1rem"><a class="btn ghost" href="${esc(c.attachment_url)}" target="_blank" rel="noopener">下载告示附件${c.attachment_name ? `（${esc(c.attachment_name)}）` : ""}</a></p>` : ""}
           ${c.topic ? `<div class="contest-sec"><h3>主题</h3><p>${esc(c.topic)}</p></div>` : ""}
           ${c.rules ? `<div class="contest-sec"><h3>参赛规则</h3><p>${esc(c.rules)}</p></div>` : ""}
           ${c.awards ? `<div class="contest-sec"><h3>奖项设置</h3><p>${esc(c.awards)}</p></div>` : ""}

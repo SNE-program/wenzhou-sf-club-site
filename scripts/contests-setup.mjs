@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS public.contests (
 
 CREATE INDEX IF NOT EXISTS idx_contests_sort ON public.contests(sort_order);
 
+-- 竞赛告示（Word 告示转 Markdown 的内容 + 附件文件），老库升级时幂等补列
+ALTER TABLE public.contests ADD COLUMN IF NOT EXISTS notice text NOT NULL DEFAULT '';
+ALTER TABLE public.contests ADD COLUMN IF NOT EXISTS attachment_url text NOT NULL DEFAULT '';
+ALTER TABLE public.contests ADD COLUMN IF NOT EXISTS attachment_name text NOT NULL DEFAULT '';
+
 ALTER TABLE public.contests ENABLE ROW LEVEL SECURITY;
 
 -- 所有人可读

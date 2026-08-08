@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -16,6 +16,15 @@
     })();
   </script>
   <link rel="stylesheet" href="css/style.css?v=12">
+  <!-- Word 告示转 Markdown（本地 vendor，仅用到「转换为 Markdown」时加载） -->
+  <script src="js/vendor/mammoth.min.js"></script>
+  <script src="js/vendor/turndown.min.js"></script>
+  <style>
+    .file-pick { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.4rem; }
+    .file-btn { margin: 0; }
+    .c-fname { font-size: 0.85rem; color: var(--text-dim); word-break: break-all; }
+    .c-hint { display: block; font-size: 0.8rem; color: var(--text-dim); margin-top: 0.45rem; }
+  </style>
 </head>
 <body>
   <div data-nav></div>
@@ -39,6 +48,9 @@
   <script src="js/supabase.js?v=5"></script>
   <script src="js/auth.js?v=2"></script>
   <script>
+    // 登录/登出后整页重建（表单依赖登录态，避免停留在未登录占位页）
+    window.addEventListener("sb-auth-changed", () => location.reload());
+
     (async function () {
       const root = document.getElementById("admin-root");
       const user = SB.user();
@@ -82,6 +94,19 @@
               <label class="c-field">参赛规则<textarea name="rules" rows="4">${esc(v("rules"))}</textarea></label>
               <label class="c-field">奖项设置<textarea name="awards" rows="2">${esc(v("awards"))}</textarea></label>
               <label class="c-field">获奖名单<textarea name="winners" rows="2">${esc(v("winners"))}</textarea></label>
+              <div class="c-field">
+                <span style="display:block;margin-bottom:0.1rem">竞赛告示（附件）</span>
+                <div class="file-pick">
+                  <label class="btn ghost file-btn" for="c-attach">选择 Word 告示</label>
+                  <input type="file" id="c-attach" accept=".docx,.docm" hidden>
+                  <span class="c-fname" id="c-attach-name">${item && item.attachment_name ? esc(item.attachment_name) : "未选择文件"}</span>
+                </div>
+                <button class="btn ghost" type="button" id="c-to-md" style="margin-top:0.5rem">转换为 Markdown</button>
+                <span class="c-hint" id="c-attach-hint">可选。上传 Word 告示（.docx / .docm），保存后会在竞赛页提供下载；点「转换为 Markdown」可把正文识别到下方「告示内容」。</span>
+              </div>
+              <label class="c-field">告示内容（Markdown）
+                <textarea name="notice" id="c-notice" rows="6">${esc(v("notice"))}</textarea>
+              </label>
               <div class="c-actions">
                 <button class="btn" type="submit">${item ? "保存修改" : "创建竞赛"}</button>
                 <button class="c-btn" type="button" id="form-cancel">取消</button>
@@ -147,9 +172,53 @@
       async function bindForm() {
         const form = document.getElementById("contest-form");
         const cancel = document.getElementById("form-cancel");
+        const MAX_FILE = 10 * 1024 * 1024; // 10MB
+
         cancel.addEventListener("click", () => {
           document.getElementById("form-wrap").hidden = true;
         });
+
+        // 告示附件：选中即显示文件名
+        const attachInput = document.getElementById("c-attach");
+        const attachNameEl = document.getElementById("c-attach-name");
+        if (attachInput) {
+          attachInput.addEventListener("change", () => {
+            const f = attachInput.files[0];
+            if (!f) { attachNameEl.textContent = "未选择文件"; return; }
+            if (f.size > MAX_FILE) { attachNameEl.textContent = "文件超过 10MB，请压缩后重试"; return; }
+            attachNameEl.textContent = `${f.name}（${(f.size / 1024 / 1024).toFixed(1)}MB）`;
+          });
+
+          // Word 告示 → Markdown：mammoth(Word→HTML) + turndown(HTML→Markdown)，纯浏览器本地完成
+          const toMd = document.getElementById("c-to-md");
+          const hintEl = document.getElementById("c-attach-hint");
+          toMd.addEventListener("click", async () => {
+            const f = attachInput.files[0];
+            if (!f) { hintEl.textContent = "请先选择 Word 告示文件"; return; }
+            if (!/\.(docx|docm)$/i.test(f.name)) { hintEl.textContent = "仅支持 .docx / .docm 格式，请重新选择附件"; return; }
+            if (typeof window.mammoth !== "object" || typeof window.TurndownService !== "function") {
+              hintEl.textContent = "转换组件加载失败，请刷新页面重试";
+              return;
+            }
+            toMd.disabled = true;
+            toMd.textContent = "转换中…";
+            try {
+              const arrayBuffer = await f.arrayBuffer();
+              const { value: html } = await window.mammoth.convertToHtml({ arrayBuffer });
+              const md = new window.TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" }).turndown(html);
+              if (!md.trim()) throw new Error("未识别到文字内容");
+              const noticeEl = document.getElementById("c-notice");
+              noticeEl.value = md.trim() + "\n";
+              hintEl.textContent = `已把《${f.name}》识别为 Markdown 写入「告示内容」，请检查后保存。`;
+            } catch (err) {
+              hintEl.textContent = "转换失败：" + (err.message || "未知错误") + "。也可直接复制文本粘贴到「告示内容」。";
+            } finally {
+              toMd.disabled = false;
+              toMd.textContent = "转换为 Markdown";
+            }
+          });
+        }
+
         form.addEventListener("submit", async (e) => {
           e.preventDefault();
           const fd = new FormData(form);
@@ -163,9 +232,36 @@
             rules: fd.get("rules").trim(),
             awards: fd.get("awards").trim(),
             winners: fd.get("winners").trim(),
+            notice: (fd.get("notice") || "").trim(),
           };
           if (!body.title) return;
           const btn = form.querySelector("button[type=submit]");
+
+          // 新选了告示附件 → 先上传到 Storage（公开），再随竞赛信息保存
+          const attachFile = attachInput && attachInput.files[0];
+          if (attachFile) {
+            if (attachFile.size > MAX_FILE) { alert("告示附件超过 10MB，请压缩后重试"); return; }
+            btn.disabled = true;
+            btn.textContent = "上传告示附件…";
+            try {
+              const uid = (SB.user() || {}).id || "admin";
+              const safe = String(attachFile.name || "notice")
+                .replace(/[\\/:*?"<>|#%&{}$!'@+`=]/g, "_")
+                .replace(/[^\x00-\x7F]/g, "_")
+                .replace(/_+/g, "_")
+                .replace(/^_|_$/g, "")
+                .slice(0, 60) || "notice";
+              const path = `contests/${uid}/${Date.now()}_${safe}`;
+              body.attachment_url = await SB.uploadFile(path, attachFile);
+              body.attachment_name = attachFile.name;
+            } catch (err) {
+              alert("上传告示附件失败：" + err.message);
+              btn.disabled = false;
+              btn.textContent = id ? "保存修改" : "创建竞赛";
+              return;
+            }
+          }
+
           btn.disabled = true;
           btn.textContent = "保存中…";
           try {
