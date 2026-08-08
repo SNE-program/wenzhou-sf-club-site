@@ -6,7 +6,7 @@
 // 用法：node scripts/gen-article-pages.mjs   （部署时由 GitHub Actions 自动执行）
 // ============================================
 
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, unlink } from "node:fs/promises";
 import zlib from "node:zlib";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -228,8 +228,10 @@ await mkdir(IMG_DIR, { recursive: true });
 await writeFile(path.join(IMG_DIR, "og-default.png"), buildOgImage());
 
 let count = 0;
+const validIds = new Set();
 for (const item of activities || []) {
   if (!item || !item.id) continue;
+  validIds.add(item.id);
   const html = articlePageHTML({
     id: item.id,
     type: "activities",
@@ -243,6 +245,7 @@ for (const item of activities || []) {
 }
 for (const item of works || []) {
   if (!item || !item.id) continue;
+  validIds.add(item.id);
   const html = articlePageHTML({
     id: item.id,
     type: "works",
@@ -255,5 +258,17 @@ for (const item of works || []) {
   count++;
 }
 
-console.log(`[生成器] 完成：${count} 个静态文章页 + images/og-default.png`);
+// 清理孤儿文章页：已下架/已删除内容对应的静态页一并移除，避免旧链接残留
+let removed = 0;
+const existing = await readdir(OUT_DIR).catch(() => []);
+for (const f of existing) {
+  if (!/\.html$/.test(f)) continue;
+  const id = f.slice(0, -5);
+  if (!validIds.has(id)) {
+    await unlink(path.join(OUT_DIR, f)).catch(() => {});
+    removed++;
+  }
+}
+
+console.log(`[生成器] 完成：${count} 个静态文章页 + images/og-default.png（清理孤儿页 ${removed} 个）`);
 console.log(`[生成器] 站点名称：${site.name || "(未读取到 site.json)"}`);

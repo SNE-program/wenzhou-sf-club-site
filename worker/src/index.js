@@ -97,6 +97,7 @@ function mapWork(row) {
     summary: propText(p["简介"]),
     body: propText(p["正文"]),
     cover: propCover(p["封面"]),
+    status: propText(p["发布状态"]),
   };
 }
 
@@ -159,7 +160,7 @@ async function loadSection(route) {
     }
     case "works": {
       const data = await queryDatabase(DB_WORKS, { page_size: 100 });
-      return data.results.map(mapWork).filter((x) => x.title);
+      return data.results.map(mapWork).filter((x) => x.title && x.status !== "已下架");
     }
     case "contests": {
       const data = await queryDatabase(DB_CONTESTS, {

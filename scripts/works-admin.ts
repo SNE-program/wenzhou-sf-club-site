@@ -1,0 +1,162 @@
+// ============================================
+// Supabase Edge Function：作品管理（列表 + 下架 / 上架 / 删除）
+// 基于 jsr:@supabase/server，复用 send-audit-email 的部署方式。
+//
+// 接口：
+//   GET  {SUPABASE_URL}/functions/v1/works-admin
+//        → 全部作品列表（含发布状态），仅管理员
+//   POST {SUPABASE_URL}/functions/v1/works-admin
+//        body: { action: "down" | "up" | "delete", id: "<作品页ID>" }
+//        → down: 下架（发布状态=已下架，前台隐藏；可恢复）
+//           up:   上架（发布状态=已上架）
+//           delete: 永久删除（Notion archive，不可恢复）
+//   headers: Authorization: Bearer <管理员登录JWT>，apikey: <anon>
+//
+// 下架/上架改的是 Notion 作品库「发布状态」列；Worker 定时对比数据指纹后
+// 触发重建，前台 works 列表与静态文章页会自动隐藏/恢复（约 5 分钟内生效）。
+//
+// 重要：本文件所有中文字符串均以 \uXXXX 转义书写（纯 ASCII），
+// 避免在 Dashboard 中复制粘贴时编码被破坏导致 Notion 查询 400。
+// ============================================
+
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { withSupabase } from "jsr:@supabase/server@^1";
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const NOTION_TOKEN = (Deno.env.get("NOTION_TOKEN") ?? "").trim();
+const NOTION_VERSION = "2022-06-28";
+const DB_WORKS = (Deno.env.get("DB_WORKS") ?? "3b339fd6-4004-8111-aac9-cf77c0c99eab").trim();
+
+// 中文字符串常量（\uXXXX 转义，粘贴安全）
+const S = {
+  status: "\u53d1\u5e03\u72b6\u6001", // 发布状态
+  up: "\u5df2\u4e0a\u67b6", // 已上架
+  down: "\u5df2\u4e0b\u67b6", // 已下架
+  title: "\u6807\u9898", // 标题
+  author: "\u4f5c\u8005", // 作者
+  category: "\u5206\u7c7b", // 分类
+  summary: "\u7b80\u4ecb", // 简介
+  notLogin: "\u672a\u767b\u5f55", // 未登录
+  noAdmin: "\u65e0\u7ba1\u7406\u5458\u6743\u9650", // 无管理员权限
+  missingArgs: "\u7f3a\u5c11\u53c2\u6570 action/id", // 缺少参数 action/id
+  notFound: "\u4f5c\u54c1\u4e0d\u5b58\u5728", // 作品不存在
+};
+
+function notionHeaders() {
+  return {
+    Authorization: `Bearer ${NOTION_TOKEN}`,
+    "Notion-Version": NOTION_VERSION,
+    "Content-Type": "application/json",
+  };
+}
+
+async function throwWithDetail(prefix, res) {
+  const detail = await res.text().catch(() => "");
+  throw new Error(`${prefix} ${res.status}${detail ? ": " + detail.slice(0, 300) : ""}`);
+}
+
+/** Notion 行 → 前端字段 */
+function mapRow(row) {
+  const p = row.properties || {};
+  const text = (k) => {
+    const v = p[k];
+    if (!v) return "";
+    if (v.type === "title") return v.title.map((t) => t.plain_text).join("");
+    if (v.type === "rich_text") return v.rich_text.map((t) => t.plain_text).join("");
+    if (v.type === "select") return v.select ? v.select.name : "";
+    return "";
+  };
+  return {
+    id: row.id,
+    title: text(S.title),
+    author: text(S.author),
+    category: text(S.category),
+    summary: text(S.summary),
+    status: text(S.status) || S.up,
+    created: row.created_time || "",
+  };
+}
+
+export default {
+  fetch: withSupabase({ auth: "user" }, async (req) => {
+    // 管理员校验
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+    const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser(token);
+    if (userErr || !user) {
+      return Response.json({ error: S.notLogin }, { status: 401 });
+    }
+    const { data: me } = await supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!me || !me.is_admin) {
+      return Response.json({ error: S.noAdmin }, { status: 403 });
+    }
+
+    if (!NOTION_TOKEN) {
+      return Response.json({ error: "works-admin not configured (NOTION_TOKEN)" }, { status: 501 });
+    }
+
+    // GET：全部作品列表
+    if (req.method === "GET") {
+      try {
+        const res = await fetch(`https://api.notion.com/v1/databases/${DB_WORKS}/query`, {
+          method: "POST",
+          headers: notionHeaders(),
+          body: JSON.stringify({ page_size: 100 }),
+        });
+        if (!res.ok) await throwWithDetail("query failed", res);
+        const rows = (await res.json()).results || [];
+        return Response.json(rows.map(mapRow));
+      } catch (e) {
+        return Response.json({ error: e.message }, { status: 502 });
+      }
+    }
+
+    // POST：下架 / 上架 / 删除
+    if (req.method === "POST") {
+      let body;
+      try {
+        body = await req.json();
+      } catch {
+        return Response.json({ error: "bad json" }, { status: 400 });
+      }
+      const { action, id } = body || {};
+      if (!["down", "up", "delete"].includes(action) || !id) {
+        return Response.json({ error: S.missingArgs }, { status: 400 });
+      }
+      try {
+        if (action === "delete") {
+          const res = await fetch(`https://api.notion.com/v1/pages/${id}`, {
+            method: "DELETE",
+            headers: notionHeaders(),
+          });
+          if (!res.ok && res.status !== 404) await throwWithDetail("delete failed", res);
+        } else {
+          const res = await fetch(`https://api.notion.com/v1/pages/${id}`, {
+            method: "PATCH",
+            headers: notionHeaders(),
+            body: JSON.stringify({
+              properties: { [S.status]: { select: { name: action === "down" ? S.down : S.up } } },
+            }),
+          });
+          if (!res.ok) await throwWithDetail("update failed", res);
+        }
+        return Response.json({ ok: true });
+      } catch (e) {
+        return Response.json({ error: e.message }, { status: 502 });
+      }
+    }
+
+    return Response.json({ error: "Method Not Allowed" }, { status: 405 });
+  }),
+};

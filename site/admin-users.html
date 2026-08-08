@@ -24,6 +24,7 @@
     .um-tag { font-size: 0.75rem; padding: 0.05rem 0.45rem; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); }
     .um-tag.admin { color: var(--accent); border-color: var(--accent); }
     .um-tag.muted { color: #f59e0b; border-color: #f59e0b; }
+    .um-tag.warning { color: #fbbf24; border-color: #fbbf24; }
     .um-tag.banned { color: #f87171; border-color: #f87171; }
     .um-tag.pending { color: var(--accent); border-color: var(--accent); }
     .um-tag.rejected { color: #f87171; border-color: #f87171; }
@@ -39,8 +40,8 @@
   <main class="container">
     <div class="page-head">
       <h1>人员管理</h1>
-      <div class="sub">禁言（禁止评论）、封禁（禁止登录与重新注册）、踢出（注销账户，可重新入站）；禁言与封禁可撤销，踢出不可撤销。管理员账号不受这些操作影响，仅能通过命令工具添加或移除。</div>
-      <p style="margin-top:1rem"><a class="btn" href="admin.html">入站审核</a> <a class="btn" href="admin-reports.html">举报处理</a> <a class="btn" href="admin-comments.html">评论管理</a> <a class="btn" href="admin-submissions.html">投稿审核</a> <a class="btn" href="admin-contests.html">管理竞赛</a></p>
+      <div class="sub">禁言（禁止评论）、封禁（禁止登录与重新注册）、踢出（注销账户，可重新入站）、警告（邮件提醒，附警告次数）；禁言、封禁与警告可撤销，踢出不可撤销。管理员账号不受这些操作影响，仅能通过命令工具添加或移除。</div>
+      <p style="margin-top:1rem"><a class="btn" href="admin.html">入站审核</a> <a class="btn" href="admin-reports.html">举报处理</a> <a class="btn" href="admin-comments.html">评论管理</a> <a class="btn" href="admin-submissions.html">投稿审核</a> <a class="btn" href="admin-works.html">作品管理</a> <a class="btn" href="admin-contests.html">管理竞赛</a></p>
     </div>
 
     <div id="admin-root">
@@ -55,6 +56,23 @@
   <script src="js/supabase.js?v=6"></script>
   <script src="js/auth.js?v=2"></script>
   <script>
+    const FUNC_URL = `${SB.url}/functions/v1/admin-warning`;
+
+    async function callFn(url, opts = {}) {
+      const res = await fetch(url, {
+        ...opts,
+        headers: {
+          apikey: SB.anon,
+          Authorization: "Bearer " + SB.token(),
+          "Content-Type": "application/json",
+          ...(opts.headers || {}),
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `请求失败 ${res.status}`);
+      return data;
+    }
+
     // 登录/登出后整页重建
     window.addEventListener("sb-auth-changed", () => location.reload());
 
@@ -84,7 +102,7 @@
 
       let rows = [];
       async function loadRows() {
-        rows = await SB.get("profiles", "select=user_id,nickname,email,status,is_admin,muted,banned,created_at&order=is_admin.desc,created_at.asc");
+        rows = await SB.get("profiles", "select=user_id,nickname,email,status,is_admin,muted,banned,warning_count,created_at&order=is_admin.desc,created_at.asc");
       }
 
       try {
@@ -108,6 +126,7 @@
             if (isAdmin) tags.push(`<span class="um-tag admin">管理员</span>`);
             if (u.muted) tags.push(`<span class="um-tag muted">已禁言</span>`);
             if (u.banned) tags.push(`<span class="um-tag banned">已封禁</span>`);
+            if (u.warning_count > 0) tags.push(`<span class="um-tag warning">警告×${u.warning_count}</span>`);
             return `
               <div class="um-item" data-uid="${u.user_id}">
                 <div class="um-info">
@@ -126,6 +145,7 @@
                       ${u.banned
                         ? `<button class="btn ghost" type="button" data-act="unban">解除封禁</button>`
                         : `<button class="c-btn" type="button" data-act="ban">封禁</button>`}
+                      <button class="btn ghost" type="button" data-act="warn">警告</button>
                       <button class="c-btn audit-reject" type="button" data-act="kick">踢出</button>`}
                 </div>
               </div>`;
@@ -163,6 +183,12 @@
             case "kick":
               if (!confirm(`确认踢出「${name}」吗？将注销其账户与全部数据（评论、表态、举报），此操作不可撤销；该邮箱之后可重新注册入站。`)) return;
               await SB.rpc("admin_delete_user", { target_uid: uid });
+              break;
+            case "warn":
+              const reason = (prompt(`向「${name}」发送警告邮件。\n填写警告原因（将随邮件发送给该用户）：`, "") || "").trim();
+              if (!reason) return;
+              if (!confirm(`确认向「${name}」（${u.email}）发送警告邮件？`)) return;
+              await callFn(FUNC_URL, { method: "POST", body: JSON.stringify({ target_uid: uid, reason }) });
               break;
           }
           await loadRows();

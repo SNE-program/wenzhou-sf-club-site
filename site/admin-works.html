@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>作品管理 · 温州中学科学及幻想文学社</title>
+  <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=12">
+  <style>
+    .wm-item {
+      display: flex; align-items: center; gap: 1rem;
+      padding: 0.9rem 1rem; border: 1px solid var(--border);
+      border-radius: 12px; margin-bottom: 0.6rem; background: var(--surface);
+    }
+    .wm-info { flex: 1; min-width: 0; }
+    .wm-title { font-weight: 700; color: var(--text); word-break: break-all; }
+    .wm-meta { font-size: 0.82rem; color: var(--text-dim); margin-top: 0.25rem; }
+    .wm-tag {
+      display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px;
+      font-size: 0.75rem; font-weight: 600; margin-left: 0.4rem; vertical-align: middle;
+    }
+    .wm-tag.on { background: rgba(74, 222, 128, 0.14); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.35); }
+    .wm-tag.off { background: rgba(148, 163, 184, 0.14); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.35); }
+    .wm-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; justify-content: flex-end; }
+    .wm-note { font-size: 0.82rem; color: var(--text-dim); margin-top: 0.6rem; }
+  </style>
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>作品管理</h1>
+      <div class="sub">管理已发布作品：下架后前台列表与文章页自动隐藏（可恢复）；删除为永久移除，不可恢复。</div>
+    </div>
+    <p><a class="back-link" href="admin.html">← 返回管理后台</a></p>
+
+    <div id="admin-root">
+      <div class="state"><div class="spinner"></div>正在加载……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=5"></script>
+  <script src="js/api.js?v=5"></script>
+  <script src="js/supabase.js?v=6"></script>
+  <script src="js/auth.js?v=2"></script>
+  <script>
+    const FUNC_URL = `${SB.url}/functions/v1/works-admin`;
+
+    async function callFn(url, opts = {}) {
+      const res = await fetch(url, {
+        ...opts,
+        headers: {
+          apikey: SB.anon,
+          Authorization: "Bearer " + SB.token(),
+          "Content-Type": "application/json",
+          ...(opts.headers || {}),
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `请求失败 ${res.status}`);
+      return data;
+    }
+
+    function timeLabel(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    (async function () {
+      const root = document.getElementById("admin-root");
+      const user = SB.user();
+      if (!user) {
+        root.innerHTML = `<div class="state"><p>请先登录管理员账号</p><p style="margin-top:1rem"><button class="btn" id="go-login" type="button">登录</button></p></div>`;
+        document.getElementById("go-login").addEventListener("click", () => window.openAuthModal("login"));
+        return;
+      }
+      const me = await window.getMyProfile();
+      if (!me || !me.is_admin) {
+        root.innerHTML = `<div class="state">你没有管理权限。</div>`;
+        return;
+      }
+
+      let rows = [];
+      try {
+        rows = await callFn(FUNC_URL);
+      } catch (e) {
+        root.innerHTML = `<div class="state">加载失败：${esc(e.message)}<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+        return;
+      }
+      if (!rows.length) {
+        root.innerHTML = `<div class="state">作品库为空。</div>`;
+        return;
+      }
+
+      function renderList() {
+        const onCount = rows.filter((w) => w.status !== "已下架").length;
+        root.innerHTML = `
+          <div class="audit-count">作品 <b>${rows.length}</b> 篇 · 已上架 <b>${onCount}</b> · 已下架 <b>${rows.length - onCount}</b></div>
+          ${rows.map((w) => `
+            <div class="wm-item" data-id="${esc(w.id)}">
+              <div class="wm-info">
+                <span class="wm-title">${esc(w.title || "（无标题）")}</span>
+                <span class="wm-tag ${w.status === "已下架" ? "off" : "on"}">${w.status === "已下架" ? "已下架" : "已上架"}</span>
+                <div class="wm-meta">${esc(w.author || "匿名")} · ${esc(w.category || "未分类")} · ${esc(timeLabel(w.created))}</div>
+                <div class="wm-meta" style="margin-top:0.15rem">${esc((w.summary || "").slice(0, 120))}</div>
+              </div>
+              <div class="wm-actions">
+                ${w.status === "已下架"
+                  ? `<button class="btn" data-act="up" type="button">上架</button>`
+                  : `<button class="btn ghost" data-act="down" type="button">下架</button>`}
+                <button class="c-btn" data-act="delete" type="button" style="color:#f87171">删除</button>
+              </div>
+            </div>`).join("")}
+          <p class="wm-note">下架/上架约 5 分钟内生效（等待同步）；删除为永久移除，请谨慎操作。</p>`;
+
+        root.querySelectorAll(".wm-item").forEach((item) => {
+          const id = item.dataset.id;
+          item.querySelectorAll("[data-act]").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+              const act = btn.dataset.act;
+              const w = rows.find((x) => x.id === id);
+              if (!w) return;
+              let ok = true;
+              if (act === "down") {
+                ok = confirm(`确认下架《${w.title}》？\n前台作品列表与文章页将隐藏，之后可随时上架恢复。`);
+              } else if (act === "up") {
+                ok = confirm(`确认上架《${w.title}》？`);
+              } else {
+                ok = confirm(`确认永久删除《${w.title}》？\n此操作不可恢复（Notion 归档），请谨慎！`);
+              }
+              if (!ok) return;
+              const btns = item.querySelectorAll("button");
+              btns.forEach((b) => (b.disabled = true));
+              try {
+                await callFn(FUNC_URL, { method: "POST", body: JSON.stringify({ action: act, id }) });
+                if (act === "delete") {
+                  rows = rows.filter((x) => x.id !== id);
+                } else {
+                  w.status = act === "down" ? "已下架" : "已上架";
+                }
+                renderList();
+              } catch (e) {
+                alert("操作失败：" + e.message);
+                btns.forEach((b) => (b.disabled = false));
+              }
+            });
+          });
+        });
+      }
+
+      renderList();
+    })();
+  </script>
+</body>
+</html>

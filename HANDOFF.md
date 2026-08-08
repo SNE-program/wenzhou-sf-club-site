@@ -5,6 +5,8 @@
 
 ## 当前状态
 
+✅ **进程 #21 作品管理 + 警告邮件（站规第四十一条补齐）**：对照站规诊断出"无法快速执行"的管理员操作后实施。① 新增 `site/admin-works.html` 作品管理页（admin.html 加入口）：列出全部作品（标题/作者/分类/摘要/发布状态标签），可**上架/下架**（改 Notion「发布状态」列，前台列表与静态文章页约 5 分钟内自动隐藏/恢复）与**删除**（Notion 归档，不可恢复）。② Notion 作品库加「发布状态」select 列（已上架/已下架）；`gen-site-data.mjs` + `worker/src/index.js` 的 mapWork 输出 status 并过滤已下架；`gen-article-pages.mjs` 生成时清理孤儿文章页（下架作品的静态页随之移除）。③ 新增 `site/admin-users.html` 的**警告**按钮（邮件提醒 + `profiles.warning_count` 计数）：调 `admin-warning` Edge Function 向目标用户发警告邮件（Resend，样式同审核邮件），警告次数在人员列表显示"警告×N"。**待部署**：`works-admin`/`admin-warning` 两个 Edge Function 需在 Supabase Dashboard 手动部署（粘贴 `scripts/works-admin.ts`/`scripts/admin-warning.ts`，前者需 `NOTION_TOKEN`，后者复用 `RESEND_API_KEY`/`RESEND_FROM`）；Worker 的 mapWork 过滤改动需重新 `wrangler deploy` 生效。**待推送**：本次改动未提交（见 git status）。《冰血》已在 Notion 标记「已下架」（验证用），待用户确认是否保留。
+
 ✅ **进程 #20 人员管理后台**：新增 `site/admin-users.html` 人员管理页（admin.html 顶部加入口），管理员可对账户执行 **禁言**（muted：禁止评论/表态/举报）、**封禁**（banned：禁止登录互动 + 该邮箱禁止重新注册）、**踢出**（admin_delete_user 删除账户，允许重新注册入站），禁言/封禁可撤销、踢出不可撤销；管理员账号无操作按钮（仅命令工具 `scripts/promote-admin.mjs` / `scripts/revoke-admin.mjs` 添加/移除）。实现：`profiles` 增 `muted`/`banned` 列；新建 `banned` 封禁邮箱表（RLS 开启无策略，仅安全定义者 RPC 可访问）；注册触发器 `handle_new_user` 拦截封禁邮箱 INSERT auth.users；互动守卫触发器 `guard_interaction`（comments/votes/reports 需 approved+未禁言+未封禁）；`guard_profile_update` 保护 muted/banned 字段（非管理员只许改昵称）；RPC `admin_delete_user`/`admin_set_banned`/`check_email_banned`（前两者仅 authenticated+管理员可调，权限已 REVOKE 收紧）。前端 `supabase.js` 新增 `rpc()`；`auth.js` 加载 muted/banned、封禁用户登录即强制登出、注册前预检封禁邮箱；`article.js` 评论/表态/举报/编辑/删除 6 处禁言封禁拦截。迁移脚本 `scripts/user-manage-setup.mjs`（幂等，独立于已过时的 supabase-setup.mjs）。**已推送 main**（见本轮工作表，commit 号见 git log）。**说明：GoTrue 对已存在邮箱的 signup 会短路返回已有用户（不新建账户），封禁邮箱的最终防线是 DB 触发器 RAISE（已实测有效），前端预检为第一道体验层拦截。**
 
 ✅ **进程 #18/19 正文 Markdown 渲染 + Word 附件一键转 Markdown + 投稿 20000 字**（见下方记录，均已上线）。
@@ -24,6 +26,21 @@
 > ⚠️ **进程 #16 遗留人工步骤（必做）**：`submit-work` Edge Function 尚未部署（无 Supabase CLI token）。请在 Supabase Dashboard → Edge Functions → `submission-review` → 复制其 Secrets（NOTION_TOKEN / DB_SUBMISSIONS 已有），新建 `submit-work` 粘贴 `scripts/submit-work.ts` 内容并 Deploy。部署后站内投稿才可用（未部署时 submit.html 提交会报"投稿服务未配置"）。
 
 ## 已完成的工作
+
+### 本轮（自动化 AI 进程 #21）工作
+| 项 | 内容 | 结果 |
+|---|---|---|
+| 需求澄清 | 用户对照站规（`站规/站规.md`）问有哪些"无法快速执行"的管理员操作；确认范围：**作品管理（下架/上架/删除）+ 警告提示做成邮件**（对应站规第四十一条违规处理措施、第三十七条侵权下架） | ✅ AskUserQuestion |
+| Notion 作品库 | 加「发布状态」select 列（已上架=green / 已下架=gray），`_tmp_add_publish_status.mjs` | ✅ 已加列 |
+| 数据源过滤 | `gen-site-data.mjs` mapWork 输出 `status` + `loadWorks` 过滤 `已下架`；`worker/src/index.js` mapWork 加 status + `loadSection` case "works" 过滤 | ✅ 代码完成（Worker 需重新部署） |
+| 孤儿文章页 | `gen-article-pages.mjs`：生成完 validIds 后清理不在 data 中的 `.html`（下架/删除作品的静态页随之移除） | ✅ 代码完成 |
+| 后端 Edge Function | `scripts/works-admin.ts`：GET 全部作品 / POST down/up/delete（改 Notion 发布状态 / DELETE 归档），管理员校验，中文 \uXXXX 转义粘贴安全 | ✅ 代码完成（待部署） |
+| 前端作品管理页 | `site/admin-works.html`：列表 + 上架/下架/删除按钮 + confirm；`admin.html` 加入口 | ✅ 代码完成 |
+| 警告邮件 | `scripts/admin-warning.ts`：管理员校验 → 读目标 profile → Resend 发警告邮件 → `warning_count+1`；`user-manage-setup.mjs` profiles 加 `warning_count int DEFAULT 0`（已线上执行）；`admin-users.html` 加警告按钮 + "警告×N"标签 | ✅ 代码完成（待部署） |
+| 核心链路验证 | `_tmp_works_sim.mjs` down《冰血》→ Notion 200 → 本地 gen-site-data → works.json 3 条、不含《冰血》、每条含 status 字段 | ✅ 实测通过 |
+| 语法检查 | gen-site-data / gen-article-pages / user-manage-setup `node --check` 通过；admin-works/admin-users 内联脚本 `new Function` OK | ✅ |
+| 提交推送 | 本次改动**未提交未推送**（待用户确认 + 部署后再推） | ⏳ |
+| 部署说明 | 两个 Edge Function（works-admin / admin-warning）+ Worker 重新部署需用户 Dashboard 操作 | ⏳ 见当前状态 |
 
 ### 本轮（自动化 AI 进程 #20）工作
 | 项 | 内容 | 结果 |

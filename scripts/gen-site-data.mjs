@@ -90,6 +90,7 @@ function mapWork(row) {
     body: propText(p["正文"]),
     cover: propCover(p["封面"]),
     attachment: propAttachment(p["附件"]),
+    status: propText(p["发布状态"]),
   };
 }
 
@@ -155,7 +156,7 @@ async function loadActivities() {
 
 async function loadWorks() {
   const data = await queryDatabase(DBS.works, { page_size: 100 });
-  return data.results.map(mapWork).filter((x) => x.title);
+  return data.results.map(mapWork).filter((x) => x.title && x.status !== "已下架");
 }
 
 async function loadContests() {

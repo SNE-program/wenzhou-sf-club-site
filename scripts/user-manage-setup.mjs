@@ -24,9 +24,10 @@ console.log("已连接数据库");
 const sql = `
 BEGIN;
 
--- 1) profiles 增加禁言 / 封禁标记
+-- 1) profiles 增加禁言 / 封禁标记 / 警告次数
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS muted  boolean NOT NULL DEFAULT false;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS banned boolean NOT NULL DEFAULT false;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS warning_count int NOT NULL DEFAULT 0;
 
 -- 2) 封禁邮箱表：仅安全定义者 RPC / 触发器可访问；RLS 开启且无策略 = 拒绝一切直接访问
 CREATE TABLE IF NOT EXISTS public.banned (
