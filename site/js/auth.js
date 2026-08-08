@@ -23,6 +23,27 @@
     return null;
   }
 
+  // 顶部轻提示（邮箱验证结果等），自带样式，无需改 CSS 版本号
+  function showToast(msg, kind = "ok") {
+    const old = document.getElementById("auth-toast");
+    if (old) old.remove();
+    const t = document.createElement("div");
+    t.id = "auth-toast";
+    const bg = kind === "error" ? "rgba(220,38,38,.95)" : "rgba(6,150,90,.95)";
+    t.style.cssText =
+      "position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;" +
+      "max-width:min(92vw,560px);padding:12px 18px;border-radius:12px;color:#fff;" +
+      "font-size:14px;line-height:1.6;box-shadow:0 8px 24px rgba(0,0,0,.35);background:" + bg + ";";
+    t.textContent = msg;
+    document.body.appendChild(t);
+    t.addEventListener("click", () => t.remove());
+    setTimeout(() => {
+      t.style.transition = "opacity .4s";
+      t.style.opacity = "0";
+      setTimeout(() => t.remove(), 400);
+    }, 7000);
+  }
+
   // 读取当前用户资料（status / is_admin / nickname），带本地缓存
   async function loadProfile() {
     const user = SB.user();
@@ -282,10 +303,26 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     const links = document.querySelector("#nav-links");
-    if (links) {
-      links.insertAdjacentHTML("beforeend", `<span id="auth-area"></span>`);
-      render();
-    }
+    if (!links) return;
+    links.insertAdjacentHTML("beforeend", `<span id="auth-area"></span>`);
+    // 处理邮箱验证 / 密码重置链接跳回时的 token：校验并保存登录态、清理 URL、给用户提示
+    Promise.resolve(SB.handleAuthRedirect())
+      .then((r) => {
+        if (r) {
+          let msg = null;
+          let kind = "ok";
+          if (r.error) {
+            msg = "验证未通过：" + r.error + "。请重新操作，或联系管理员。";
+            kind = "error";
+          } else if (r.type === "signup" && r.loggedIn) {
+            msg = "邮箱验证成功！你的账号已提交管理员审核，通过后即可正常使用。";
+          } else if (r.loggedIn) {
+            msg = "验证成功。";
+          }
+          if (msg) showToast(msg, kind);
+        }
+        render();
+      });
     // 会话被清除（如刷新 token 失败、登出）时同步界面
     window.addEventListener("sb-auth-changed", render);
   });

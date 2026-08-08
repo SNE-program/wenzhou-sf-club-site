@@ -287,7 +287,7 @@
             <span class="c-time">${esc(timeLabel(c.created_at))}</span>
             ${c.edited_at ? `<span class="c-edited">已编辑</span>` : ""}
           </div>
-          <div class="c-content" data-role="content">${esc(c.content)}</div>
+          <div class="c-content" data-role="content" data-raw="${esc(c.content)}">${renderCommentMd(c.content)}</div>
           <div class="c-actions">
             ${mine ? `<button class="c-btn" data-act="edit">编辑</button>
               <button class="c-btn" data-act="delete">删除</button>` : ""}
@@ -333,6 +333,8 @@
       input.placeholder = "登录后可评论";
       submit.hidden = true;
     }
+    // 工具栏按钮与输入框同禁用
+    document.querySelectorAll("#comment-form .md-toolbar button").forEach((b) => (b.disabled = input.disabled));
   }
 
   async function submitComment() {
@@ -378,14 +380,20 @@
       return;
     }
     const content = item.querySelector('[data-role="content"]');
-    const original = content.textContent;
-    content.innerHTML = `<textarea class="edit-area" maxlength="500">${esc(original)}</textarea>`;
+    const original = content.dataset.raw || content.textContent;
+    content.innerHTML = "";
+    const ta = document.createElement("textarea");
+    ta.className = "edit-area";
+    ta.value = original;
+    content.appendChild(ta);
+    setupMdEditor(ta, { showHint: false });
     const save = document.createElement("button");
     save.className = "btn";
     save.textContent = "保存";
+    save.style.marginTop = "0.6rem";
     content.appendChild(save);
     save.addEventListener("click", async () => {
-      const newText = content.querySelector("textarea").value.trim();
+      const newText = ta.value.trim();
       if (!newText) return;
       try {
         await SB.update(
@@ -419,11 +427,177 @@
       .catch((e) => alert("举报失败：" + errText(e)));
   }
 
+  // ---------- Markdown 评论编辑器 ----------
+  const COMMENT_MAX = 1200;
+
+  // 评论 Markdown → HTML（渲染 + 清洗 + 外链新窗口打开）；renderMarkdown 内部已做 XSS 过滤
+  function renderCommentMd(src) {
+    const html = renderMarkdown(src);
+    try {
+      const tpl = document.createElement("template");
+      tpl.innerHTML = html;
+      tpl.content.querySelectorAll("a[href]").forEach((a) => {
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+      });
+      return tpl.innerHTML;
+    } catch (e) {
+      return html;
+    }
+  }
+
+  // 编辑器 / 评论 Markdown 展示样式（随 article.js 注入，避免全站 style.css 版本号连锁变更）
+  function injectMdStyles() {
+    if (document.getElementById("md-comment-style")) return;
+    const st = document.createElement("style");
+    st.id = "md-comment-style";
+    st.textContent = `
+.md-toolbar{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;align-items:center}
+.md-toolbar button{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 9px;font-size:13px;line-height:1.5;cursor:pointer}
+.md-toolbar button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.md-toolbar button:disabled{opacity:.45;cursor:not-allowed}
+.md-toolbar .md-count{margin-left:auto;font-size:12px;color:var(--text-dim);font-family:var(--font-mono)}
+.md-toolbar .md-count.over{color:var(--danger)}
+.md-hint{display:block;font-size:12px;color:var(--text-dim);margin-top:4px}
+.md-preview{margin-top:6px;padding:10px 14px;border:1px dashed var(--border);border-radius:10px;background:var(--surface)}
+.c-content,.md-preview{white-space:normal;color:var(--text);font-size:.95rem;word-break:break-word;line-height:1.75}
+.c-content> :first-child,.md-preview> :first-child{margin-top:0}
+.c-content> :last-child,.md-preview> :last-child{margin-bottom:0}
+.c-content p,.md-preview p{margin:.4em 0}
+.c-content pre,.md-preview pre{overflow-x:auto;background:rgba(127,127,127,.12);padding:10px 12px;border-radius:10px;font-size:.85rem}
+.c-content code,.md-preview code{font-family:var(--font-mono);background:rgba(127,127,127,.14);padding:1px 5px;border-radius:4px;font-size:.9em}
+.c-content pre code,.md-preview pre code{background:none;padding:0}
+.c-content blockquote,.md-preview blockquote{margin:.4em 0;padding-left:12px;border-left:3px solid var(--border);color:var(--text-dim)}
+.c-content img,.md-preview img{max-width:100%;border-radius:8px}
+.c-content a,.md-preview a{color:var(--accent);text-decoration:underline;word-break:break-all}
+.c-content ul,.md-preview ul,.c-content ol,.md-preview ol{margin:.4em 0;padding-left:1.5em}
+.c-content table,.md-preview table{border-collapse:collapse;margin:.4em 0}
+.c-content th,.md-preview th,.c-content td,.md-preview td{border:1px solid var(--border);padding:4px 10px}
+`;
+    document.head.appendChild(st);
+  }
+
+  // 在光标处插入 Markdown 语法
+  function insertMdSyntax(input, mode) {
+    const s = input.selectionStart;
+    const e = input.selectionEnd;
+    const value = input.value;
+    if (mode === "quote" || mode === "list") {
+      // 行首型：未选中时作用于当前行
+      let ls = s;
+      let le = e;
+      if (s === e) {
+        ls = value.lastIndexOf("\n", s - 1) + 1;
+        le = value.indexOf("\n", s);
+        if (le === -1) le = value.length;
+      }
+      const seg = value.slice(ls, le);
+      const prefix = mode === "quote" ? "> " : "- ";
+      input.setRangeText(seg.split("\n").map((l) => prefix + l).join("\n"), ls, le, "end");
+    } else if (mode === "codeblock") {
+      const sel = value.slice(s, e);
+      input.setRangeText("```\n" + (sel || "代码") + "\n```", s, e, "end");
+    } else if (mode === "link") {
+      const sel = value.slice(s, e);
+      input.setRangeText("[" + (sel || "文字") + "](https://)", s, e, "end");
+    } else {
+      const m = mode === "bold" ? "**" : mode === "italic" ? "*" : "`";
+      const ph = mode === "code" ? "code" : "文字";
+      const ins = m + ph + m;
+      input.setRangeText(ins, s, e, "preserve");
+      // 选中占位符，直接输入即可替换
+      input.setSelectionRange(s + m.length, s + m.length + ph.length);
+    }
+    input.dispatchEvent(new Event("input"));
+    input.focus();
+  }
+
+  // 给 textarea 装配 Markdown 编辑器（工具栏 + 预览 + 字数统计）
+  function setupMdEditor(textarea, opts) {
+    injectMdStyles();
+    textarea.maxLength = COMMENT_MAX;
+
+    // 预览区（先建，供按钮闭包引用）
+    const preview = document.createElement("div");
+    preview.className = "md-preview";
+    preview.hidden = true;
+
+    // 工具栏
+    const bar = document.createElement("div");
+    bar.className = "md-toolbar";
+    const defs = [
+      ["B", "bold", "加粗"],
+      ["I", "italic", "斜体"],
+      ["`", "code", "行内代码"],
+      ["❝", "quote", "引用"],
+      ["•", "list", "无序列表"],
+      ["<>", "codeblock", "代码块"],
+      ["🔗", "link", "插入链接"],
+    ];
+    defs.forEach(([label, mode, title]) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.title = title;
+      b.addEventListener("click", () => {
+        if (!textarea.disabled) insertMdSyntax(textarea, mode);
+      });
+      bar.appendChild(b);
+    });
+
+    const prevBtn = document.createElement("button");
+    prevBtn.type = "button";
+    prevBtn.textContent = "预览";
+    prevBtn.title = "编辑 / 预览 切换";
+    const togglePreview = () => {
+      if (textarea.disabled) return;
+      if (preview.hidden) {
+        preview.innerHTML = renderCommentMd(textarea.value || "*（空白）*");
+        preview.hidden = false;
+        textarea.hidden = true;
+        prevBtn.textContent = "编辑";
+      } else {
+        preview.hidden = true;
+        textarea.hidden = false;
+        prevBtn.textContent = "预览";
+        textarea.focus();
+      }
+    };
+    prevBtn.addEventListener("click", togglePreview);
+    bar.appendChild(prevBtn);
+
+    // 字数统计
+    const counter = document.createElement("span");
+    counter.className = "md-count";
+    const updateCount = () => {
+      const n = textarea.value.length;
+      counter.textContent = n + "/" + COMMENT_MAX;
+      counter.classList.toggle("over", n > COMMENT_MAX);
+    };
+    textarea.addEventListener("input", updateCount);
+    updateCount();
+    bar.appendChild(counter);
+
+    // 装配到页面
+    textarea.before(bar);
+    textarea.after(preview);
+    if (opts && opts.showHint) {
+      const hint = document.createElement("span");
+      hint.className = "md-hint";
+      hint.textContent = "支持 Markdown：**加粗** *斜体* `代码` > 引用 · 列表 [链接](https://…)";
+      preview.after(hint);
+    }
+    return { updateCount };
+  }
+
   // ---------- 初始化 ----------
   document.getElementById("vote-up").addEventListener("click", () => setVote(1));
   document.getElementById("vote-down").addEventListener("click", () => setVote(-1));
   document.getElementById("vote-reset").addEventListener("click", () => setVote(0));
   document.getElementById("c-submit").addEventListener("click", submitComment);
+  // 主评论框装配 Markdown 编辑器（工具栏 / 预览 / 字数统计，上限 1200 字）
+  const cInput = document.getElementById("c-input");
+  if (cInput) setupMdEditor(cInput, { showHint: true });
 
   (async function init() {
     if (!ARTICLE_ID) {

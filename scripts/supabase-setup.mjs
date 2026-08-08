@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS public.comments (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id    uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   article_id text NOT NULL,
-  content    text NOT NULL CHECK (char_length(content) BETWEEN 1 AND 500),
+  content text NOT NULL CHECK (char_length(content) BETWEEN 1 AND 1200),
   status     text NOT NULL DEFAULT 'active' CHECK (status IN ('active','deleted')),
   edited_at  timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()

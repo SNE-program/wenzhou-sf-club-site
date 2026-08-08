@@ -79,9 +79,12 @@ const SB = {
 
   // ---- Auth ----
   async signUp(email, password, nickname) {
+    // redirect_to：让验证邮件里的链接跳回当前站点（线上/本地测试均正确）。
+    // 需在控制台 Authentication→URL Configuration 的 Additional Redirect URLs 放行本地测试地址。
+    const redirect_to = location.origin + location.pathname;
     const data = await this.request("/auth/v1/signup", {
       method: "POST",
-      body: JSON.stringify({ email, password, data: { nickname } }),
+      body: JSON.stringify({ email, password, data: { nickname }, redirect_to }),
     });
     if (data.session) {
       this.saveSession(data.session);
@@ -109,10 +112,46 @@ const SB = {
   },
   // 发送密码重置邮件（GoTrue /auth/v1/recover）
   async recover(email) {
+    const redirect_to = location.origin + location.pathname;
     return this.request("/auth/v1/recover", {
       method: "POST",
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, redirect_to }),
     });
+  },
+
+  // 处理邮箱验证 / 密码重置链接跳回本页时的 token（URL hash 片段）：
+  // 解析 → 校验会话 → 保存登录态 → 清理地址栏，返回 { type, error, loggedIn } 供页面提示。
+  async handleAuthRedirect() {
+    if (!location.hash || !location.hash.startsWith("#")) return null;
+    const params = new URLSearchParams(location.hash.slice(1));
+    const type = params.get("type");
+    const error = params.get("error");
+    const access_token = params.get("access_token");
+    const refresh_token = params.get("refresh_token");
+    // 仅当出现认证相关参数时才接管，避免误清其他页面锚点
+    if (!error && !access_token && !type) return null;
+
+    // 先清理地址栏，避免 token 残留
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+
+    if (error) return { type, error: params.get("error_description") || error, loggedIn: false };
+    if (!access_token) return { type, error: null, loggedIn: false };
+
+    // 用 token 换取用户信息以校验有效性；失败（过期/无效/网络异常）则不保存会话
+    let user = null;
+    try {
+      const res = await fetch(this.url + "/auth/v1/user", {
+        headers: { apikey: this.anon, Authorization: `Bearer ${access_token}` },
+      });
+      if (res.ok) user = await res.json();
+    } catch (e) { /* 按无效处理 */ }
+    if (!user) {
+      return { type, error: "验证链接已失效或过期，请重新发送验证邮件", loggedIn: false };
+    }
+
+    this.saveSession({ access_token, refresh_token, user });
+    window.dispatchEvent(new CustomEvent("sb-auth-changed"));
+    return { type, error: null, loggedIn: true };
   },
 
   // ---- Storage（文件上传，需登录；用于投稿封面/附件）----

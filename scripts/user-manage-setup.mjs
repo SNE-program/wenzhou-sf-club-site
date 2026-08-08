@@ -38,20 +38,55 @@ ALTER TABLE public.banned ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS banned_all ON public.banned;
 
 -- 3) 注册触发器：被封禁邮箱不允许注册 / 重新入站
+--    邮箱确认制（Confirm email）下：注册时 email_confirmed_at 为空 → 不建 profile（不进入审核队列），
+--    待用户点击验证邮件链接（email_confirmed_at 置非空）后由 handle_email_confirmed 建档进入管理员审核队列。
+--    若项目关闭邮箱确认（或管理员创建已确认账号），注册时直接建档。
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
   IF EXISTS (SELECT 1 FROM public.banned WHERE email = new.email) THEN
     RAISE EXCEPTION '该邮箱已被封禁，无法注册';
   END IF;
-  INSERT INTO public.profiles (user_id, nickname)
+  IF new.email_confirmed_at IS NULL THEN
+    RETURN new;
+  END IF;
+  INSERT INTO public.profiles (user_id, nickname, email)
   VALUES (
     new.id,
-    COALESCE(new.raw_user_meta_data->>'nickname', split_part(new.email, '@', 1))
+    COALESCE(new.raw_user_meta_data->>'nickname', split_part(new.email, '@', 1)),
+    new.email
   );
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 3.1) 邮箱验证通过（email_confirmed_at 由空变为非空）时建档，进入管理员审核队列；幂等（已建档则跳过）
+CREATE OR REPLACE FUNCTION public.handle_email_confirmed()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.email_confirmed_at IS NULL THEN
+    RETURN NEW;
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.profiles WHERE user_id = NEW.id) THEN
+    RETURN NEW;
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.banned WHERE email = NEW.email) THEN
+    RAISE EXCEPTION '该邮箱已被封禁，无法注册';
+  END IF;
+  INSERT INTO public.profiles (user_id, nickname, email)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'nickname', split_part(NEW.email, '@', 1)),
+    NEW.email
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_email_confirmed ON auth.users;
+CREATE TRIGGER on_auth_user_email_confirmed
+  AFTER UPDATE ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_email_confirmed();
 
 -- 4) 资料更新守卫：非管理员只能改昵称（禁言/封禁字段同样受保护）
 CREATE OR REPLACE FUNCTION public.guard_profile_update()
@@ -167,6 +202,20 @@ $$;
 REVOKE ALL ON FUNCTION public.check_email_banned(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.check_email_banned(text) TO anon;
 GRANT EXECUTE ON FUNCTION public.check_email_banned(text) TO authenticated;
+
+-- 9) 数据修复：补写历史 profiles.email（来源 auth.users，幂等；保证人员管理的警告/审核通知可用）
+--    临时禁用 on_profile_update 守卫触发器（该触发器禁止非管理员修改 email，此处由 DBA 回填）
+ALTER TABLE public.profiles DISABLE TRIGGER on_profile_update;
+UPDATE public.profiles p
+SET email = u.email
+FROM auth.users u
+WHERE u.id = p.user_id
+  AND (p.email IS NULL OR p.email = '');
+ALTER TABLE public.profiles ENABLE TRIGGER on_profile_update;
+
+-- 10) 评论字数上限 500 → 1200（配合前端 Markdown 编辑器扩宽）
+ALTER TABLE public.comments DROP CONSTRAINT IF EXISTS comments_content_check;
+ALTER TABLE public.comments ADD CONSTRAINT comments_content_check CHECK (char_length(content) BETWEEN 1 AND 1200);
 
 COMMIT;
 `;
