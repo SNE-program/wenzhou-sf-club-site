@@ -115,6 +115,8 @@ BEGIN
   DELETE FROM public.banned b
   USING public.profiles p
   WHERE b.email = p.email AND p.user_id = target_uid;
+  -- 显式删除 profile（不依赖 FK 级联，确保踢出后人员管理不再显示该用户）
+  DELETE FROM public.profiles WHERE user_id = target_uid;
   DELETE FROM auth.users WHERE id = target_uid;
 END;
 $$;

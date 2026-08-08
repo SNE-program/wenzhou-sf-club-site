@@ -208,7 +208,7 @@ ${meta("twitter:card", "summary_large_image")}
   <script src="js/supabase.js?v=6"></script>
   <script src="js/auth.js"></script>
   <script src="js/vendor/marked.min.js"></script>
-  <script src="js/article.js?v=6"></script>
+  <script src="js/article.js?v=7"></script>
 </body>
 </html>
 `;

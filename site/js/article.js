@@ -402,8 +402,8 @@
 
   function doDelete(item) {
     if (myProfile && myProfile.banned) { hint("c-hint", "该账号已被封禁，无法操作"); return; }
-    if (!confirm("确定删除这条评论吗？")) return;
-    SB.update("comments", { status: "deleted" }, `id=eq.${item.dataset.id}`)
+    if (!confirm("确定删除这条评论吗？删除后不可恢复。")) return;
+    SB.remove("comments", `id=eq.${item.dataset.id}`)
       .then(() => { hint("c-hint", "评论已删除", true); loadComments(); })
       .catch((e) => hint("c-hint", "删除失败：" + errText(e)));
   }
