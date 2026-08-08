@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -15,7 +15,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="css/style.css?v=22">
+  <link rel="stylesheet" href="css/style.css?v=23">
   <style>
     .um-item { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: 0.8rem 0.2rem; border-bottom: 1px solid var(--border); }
     .um-item:last-child { border-bottom: none; }
@@ -40,7 +40,7 @@
   <main class="container">
     <div class="page-head">
       <h1>人员管理</h1>
-      <div class="sub">禁言（禁止评论）、封禁（禁止登录与重新注册）、踢出（注销账户，可重新入站）、警告（邮件提醒，附警告次数）；禁言、封禁与警告可撤销，踢出不可撤销。实名绑定为在校学生经名册自动核验的标识（学号仅显示脱敏掩码），解绑后回到待审核状态。管理员账号不受这些操作影响，仅能通过命令工具添加或移除。</div>
+      <div class="sub">禁言（禁止评论）、封禁（禁止登录与重新注册）、踢出（注销账户，可重新入站）、警告（开关：发出时邮件提醒，登录昵称显示 ⚠；撤销仅取消标识，不发邮件）；禁言、封禁与警告可撤销，踢出不可撤销。实名绑定为在校学生经名册自动核验的标识（学号仅显示脱敏掩码），解绑后回到待审核状态。管理员账号不受这些操作影响，仅能通过命令工具添加或移除。</div>
       <p style="margin-top:1rem"><a class="btn" href="admin.html">入站审核</a> <a class="btn" href="admin-reports.html">举报处理</a> <a class="btn" href="admin-comments.html">评论管理</a> <a class="btn" href="admin-submissions.html">投稿审核</a> <a class="btn" href="admin-works.html">作品管理</a> <a class="btn" href="admin-contests.html">管理竞赛</a></p>
     </div>
 
@@ -54,7 +54,7 @@
   <script src="js/common.js?v=8"></script>
   <script src="js/api.js?v=5"></script>
   <script src="js/supabase.js?v=8"></script>
-  <script src="js/auth.js?v=13"></script>
+  <script src="js/auth.js?v=14"></script>
   <script>
     const FUNC_URL = `${SB.url}/functions/v1/admin-warning`;
 
@@ -103,7 +103,7 @@
       let rows = [];
       let verifyMap = {};
       async function loadRows() {
-        rows = await SB.get("profiles", "select=user_id,nickname,email,status,is_admin,muted,banned,warning_count,created_at&order=is_admin.desc,created_at.asc");
+        rows = await SB.get("profiles", "select=user_id,nickname,email,status,is_admin,muted,banned,warned,created_at&order=is_admin.desc,created_at.asc");
         // 实名绑定信息经管理员 RPC 读取（学号仅存哈希，页面只展示脱敏掩码与姓名）
         try {
           const vrows = await SB.rpc("admin_list_verifications");
@@ -133,7 +133,7 @@
             if (isAdmin) tags.push(`<span class="um-tag admin">管理员</span>`);
             if (u.muted) tags.push(`<span class="um-tag muted">已禁言</span>`);
             if (u.banned) tags.push(`<span class="um-tag banned">已封禁</span>`);
-            if (u.warning_count > 0) tags.push(`<span class="um-tag warning">警告×${u.warning_count}</span>`);
+            if (u.warned) tags.push(`<span class="um-tag warning">已警告</span>`);
             return `
               <div class="um-item" data-uid="${u.user_id}">
                 <div class="um-info">
@@ -154,7 +154,9 @@
                         ? `<button class="btn ghost" type="button" data-act="unban">解除封禁</button>`
                         : `<button class="c-btn audit-reject" type="button" data-act="ban">封禁</button>`}
                       ${verifyMap[u.user_id] ? `<button class="btn ghost" type="button" data-act="unbind">解绑实名</button>` : ""}
-                      <button class="btn ghost" type="button" data-act="warn">警告</button>
+                      ${u.warned
+                        ? `<button class="btn ghost" type="button" data-act="unwarn">撤销警告</button>`
+                        : `<button class="btn ghost" type="button" data-act="warn">警告</button>`}
                       <button class="c-btn audit-reject" type="button" data-act="kick">踢出</button>`}
                 </div>
               </div>`;
@@ -198,10 +200,14 @@
               await SB.rpc("admin_unbind_student", { target_uid: uid });
               break;
             case "warn":
-              const reason = (prompt(`向「${name}」发送警告邮件。\n填写警告原因（将随邮件发送给该用户）：`, "") || "").trim();
+              const reason = (prompt(`向「${name}」发出警告。\n填写警告原因（将随警告邮件发送给该用户）：`, "") || "").trim();
               if (!reason) return;
-              if (!confirm(`确认向「${name}」（${u.email}）发送警告邮件？`)) return;
+              if (!confirm(`确认警告「${name}」（${u.email}）？将发送警告邮件，该用户登录后昵称旁会显示 ⚠ 标识。`)) return;
               await callFn(FUNC_URL, { method: "POST", body: JSON.stringify({ target_uid: uid, reason }) });
+              break;
+            case "unwarn":
+              if (!confirm(`确认撤销对「${name}」的警告吗？将直接取消其昵称旁的 ⚠ 标识，不发送邮件。`)) return;
+              await SB.update("profiles", { warned: false }, `user_id=eq.${uid}`);
               break;
           }
           await loadRows();

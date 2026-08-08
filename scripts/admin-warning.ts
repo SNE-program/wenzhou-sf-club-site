@@ -6,7 +6,7 @@
 //   POST {SUPABASE_URL}/functions/v1/admin-warning
 //   headers: Authorization: Bearer <管理员登录JWT>，apikey: <anon>
 //   body: { target_uid: "<目标用户 uuid>", reason: "警告原因" }
-//   → 向目标用户邮箱发送警告邮件，并将该用户 warning_count +1
+//   → 向目标用户邮箱发送警告邮件，并将该用户 warned 置为 true（开关，不计数）
 //
 // 必配密钥（Settings → Environment variables，与 send-audit-email 相同）：
 //   RESEND_API_KEY / RESEND_FROM / SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
@@ -113,10 +113,10 @@ export default {
       return Response.json({ error: "邮件发送失败 " + res.status + (detail ? ": " + detail.slice(0, 200) : "") }, { status: 502 });
     }
 
-    // 记录警告次数（+1）
+    // 置警告开关（布尔，不计数）
     const { error: upErr } = await supabase
       .from("profiles")
-      .update({ warning_count: (target.warning_count || 0) + 1 })
+      .update({ warned: true })
       .eq("user_id", target_uid);
     if (upErr) {
       return Response.json({ error: "警告已发送但记录失败：" + upErr.message }, { status: 502 });

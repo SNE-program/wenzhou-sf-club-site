@@ -55,7 +55,7 @@
     try {
       const rows = await SB.get(
         "profiles",
-        `user_id=eq.${user.id}&select=user_id,nickname,status,is_admin,muted,banned`
+        `user_id=eq.${user.id}&select=user_id,nickname,status,is_admin,muted,banned,warned`
       );
       const p = rows[0] || null;
       if (p) {
@@ -108,7 +108,7 @@
             : ""
         : "";
       area.innerHTML = `
-        <span class="auth-user" title="${esc(user.email || "")}">${esc(nick)}${profile && profile.real_name ? `<span class="c-real">${esc(profile.real_name)}</span>` : ""}</span>
+        <span class="auth-user" title="${esc(user.email || "")}">${esc(nick)}${profile && profile.warned ? `<span class="auth-warn" title="你已被管理员警告，请注意遵守站规">⚠</span>` : ""}${profile && profile.real_name ? `<span class="c-real">${esc(profile.real_name)}</span>` : ""}</span>
         ${tag}
         ${!profile.real_name ? `<button class="auth-btn" type="button" id="btn-verify" title="在校学生可凭学号姓名通过名册自动核验">实名认证</button>` : ""}
         <button class="auth-btn" type="button" id="btn-rename" title="修改昵称（7 天内仅可修改一次）">改名</button>
