@@ -219,10 +219,10 @@
       document.getElementById("f-nick").required = m === "signup";
       document.getElementById("f-pass2").required = m === "signup";
       document.getElementById("f-forgot").hidden = m !== "login";
-      // 退出“忘记密码”视图，恢复常规表单
+      // 退出“忘记密码”视图，恢复常规表单（仅恢复非注册专用字段，避免残留空标签文字）
       modalEl.querySelector(".modal-tabs").hidden = false;
       resetBox.hidden = true;
-      form.querySelectorAll("label").forEach((l) => (l.hidden = false));
+      form.querySelectorAll("label:not(.only-signup)").forEach((l) => (l.hidden = false));
       document.getElementById("f-submit").hidden = false;
     };
     tabs.forEach((t) => t.addEventListener("click", () => switchMode(t.dataset.mode)));
