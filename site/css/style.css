@@ -993,6 +993,28 @@ a.card:hover { text-decoration: none; }
   margin-bottom: 0.9rem;
 }
 .modal-form .f-row > label { margin-bottom: 0; }
+
+/* 注册通道选择：在校学生 / 非在校用户 卡片式单选 */
+.verify-path { margin-bottom: 0.9rem; }
+.path-title { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.45rem; }
+.path-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.path-opt {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem 0.6rem;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.path-opt:hover { border-color: var(--border-strong); }
+.path-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.path-opt .po-t { display: block; font-size: 0.9rem; font-weight: 500; color: var(--text); }
+.path-opt .po-d { display: block; font-size: 0.72rem; color: var(--text-dim); line-height: 1.5; margin-top: 0.15rem; }
+.path-opt:has(input:checked) {
+  border-color: var(--accent);
+  background: rgba(232, 177, 76, 0.1);
+  box-shadow: 0 0 0 1px rgba(232, 177, 76, 0.25);
+}
 .modal-form .only-signup { color: var(--accent); font-size: 0.8rem; }
 .modal-form input {
   display: block;

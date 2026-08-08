@@ -150,8 +150,15 @@
         <form class="modal-form" id="auth-form">
           <label>邮箱<input type="email" id="f-email" required placeholder="you@example.com" autocomplete="email"></label>
           <label class="only-signup">昵称<span class="only-signup">（用于展示）</span><input type="text" id="f-nick" class="only-signup" placeholder="如：星尘" maxlength="20"></label>
-          <div class="f-row only-signup">
-            <label>学号<span class="only-signup">（在校必填）</span><input type="text" id="f-sid" class="only-signup" placeholder="学号，如 27xxxx08" maxlength="20" autocomplete="off"></label>
+          <div class="verify-path only-signup">
+            <p class="path-title">请选择注册通道</p>
+            <div class="path-opts">
+              <label class="path-opt"><input type="radio" name="reg-path" value="student"><span class="po-t">在校学生</span><span class="po-d">填写学号与姓名，经名册核验免人工审核</span></label>
+              <label class="path-opt"><input type="radio" name="reg-path" value="guest"><span class="po-t">非在校用户</span><span class="po-d">不填写学号，由管理员人工审核</span></label>
+            </div>
+          </div>
+          <div class="f-row" id="f-row-student" hidden>
+            <label>学号<span class="only-signup">（在校必填）</span><input type="text" id="f-sid" class="only-signup" placeholder="学号" maxlength="20" autocomplete="off"></label>
             <label>姓名<span class="only-signup">（与名册一致）</span><input type="text" id="f-real" class="only-signup" placeholder="真实姓名" maxlength="20" autocomplete="off"></label>
           </div>
           <label>密码<span class="pass-wrap"><input type="password" id="f-pass" required placeholder="至少 6 位" autocomplete="new-password"><button type="button" class="pass-toggle" data-target="f-pass" aria-pressed="false" aria-label="显示密码" title="显示/隐藏密码"><svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></span></label>
@@ -173,7 +180,7 @@
             <button class="btn" type="button" id="r-send">发送重置链接</button>
             <button class="btn ghost" type="button" id="r-back">返回登录</button>
           </div>
-          <p class="form-note">在校学生请填写学号与姓名，注册后自动与在校名册核验，匹配即免人工审核；非在校用户可留空，由管理员人工审核。实名仅用于身份核验，公开区以笔名为主展示，学号不公开。</p>
+          <p class="form-note">注册时请先选择通道：在校学生填写学号与姓名，经名册自动核验、匹配即免人工审核；非在校用户不填写学号，由管理员人工审核。实名仅用于身份核验，公开区以笔名为主展示，学号不公开。</p>
           <p class="form-link"><a href="#" id="f-forgot">忘记密码？</a></p>
         </form>
       </div>`;
@@ -204,6 +211,10 @@
     const switchMode = (m) => {
       tabs.forEach((t) => t.classList.toggle("active", t.dataset.mode === m));
       document.querySelectorAll(".only-signup").forEach((el) => (el.hidden = m !== "signup"));
+      // 重置注册通道选择（学号/姓名字段仅在「在校学生」通道显示）
+      document.querySelectorAll('input[name="reg-path"]').forEach((r) => (r.checked = false));
+      const fRow = document.getElementById("f-row-student");
+      if (fRow) fRow.hidden = true;
       document.getElementById("f-submit").textContent = m === "signup" ? "注册" : "登录";
       document.getElementById("f-nick").required = m === "signup";
       document.getElementById("f-pass2").required = m === "signup";
@@ -216,6 +227,28 @@
     };
     tabs.forEach((t) => t.addEventListener("click", () => switchMode(t.dataset.mode)));
     switchMode(mode);
+
+    // 注册通道选择：在校学生 → 显示学号/姓名；非在校用户 → 隐藏并清空
+    const applyPath = (isStudent) => {
+      const fRow = document.getElementById("f-row-student");
+      if (fRow) fRow.hidden = !isStudent;
+      const sidEl = document.getElementById("f-sid");
+      const realEl = document.getElementById("f-real");
+      if (!isStudent) {
+        if (sidEl) { sidEl.value = ""; sidEl.required = false; }
+        if (realEl) { realEl.value = ""; realEl.required = false; }
+      } else {
+        if (sidEl) sidEl.required = true;
+        if (realEl) realEl.required = true;
+      }
+      const errEl = document.getElementById("f-err");
+      if (errEl && !errEl.hidden) errEl.hidden = true;
+    };
+    document.querySelectorAll('input[name="reg-path"]').forEach((r) =>
+      r.addEventListener("change", () => {
+        if (r.checked) applyPath(r.value === "student");
+      })
+    );
 
     // 找回密码：切换为“仅邮箱”视图
     const showReset = (e) => {
@@ -288,9 +321,14 @@
           if (pass !== pass2) throw new Error("两次输入的密码不一致");
           if (!document.getElementById("f-agree").checked)
             throw new Error("请先阅读并勾选同意《网站站规》");
-          // 学号/姓名需同时填写或同时留空（留空=非学生，走人工审核）
-          if ((sid || real) && (!sid || !real)) throw new Error("填写学号时须同时填写姓名");
-          if (sid && !/^\d+$/.test(sid)) throw new Error("学号应为数字");
+          // 通道分流：注册前必须明确选择「在校学生」或「非在校用户」
+          const pathEl = document.querySelector('input[name="reg-path"]:checked');
+          if (!pathEl) throw new Error("请先选择注册通道：在校学生 / 非在校用户");
+          const isStudent = pathEl.value === "student";
+          if (isStudent) {
+            if (!sid || !real) throw new Error("在校学生请填写学号与姓名");
+            if (!/^\d+$/.test(sid)) throw new Error("学号应为数字");
+          }
           // 封禁邮箱预检（尽力而为；失败时由数据库注册触发器兜底拦截）
           try {
             const emailBlocked = await SB.rpc("check_email_banned", { check_email: email });
@@ -300,7 +338,7 @@
           }
           const data = await SB.signUp(
             email, pass, nick || "星尘",
-            sid ? { student_id: sid, real_name: real } : {}
+            isStudent ? { student_id: sid, real_name: real } : {}
           );
           if (data.session) {
             // 未开启邮箱确认时的自动登录（保留兼容）
@@ -308,7 +346,7 @@
             await render();
           } else {
             errEl.className = "form-ok";
-            errEl.textContent = sid
+            errEl.textContent = isStudent
               ? "注册成功！验证邮件已发送至你的邮箱，请点击邮件中的链接完成验证。在校学生将自动与名册核验，匹配即免人工审核。"
               : "注册成功！验证邮件已发送至你的邮箱，请点击邮件中的链接完成验证，再返回登录等待管理员审核。";
             errEl.hidden = false;
