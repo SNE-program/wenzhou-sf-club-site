@@ -213,6 +213,10 @@
       window.openAuthModal("login");
       return;
     }
+    if (myProfile && myProfile.banned) {
+      hint("vote-hint", "该账号已被封禁，无法表态");
+      return;
+    }
     if (myProfile && myProfile.status !== "approved") {
       hint("vote-hint", myProfile.status === "pending" ? "账号审核中，通过后可表态" : "账号未通过审核，暂不可表态");
       return;
@@ -310,13 +314,19 @@
     const user = SB.user();
     const input = document.getElementById("c-input");
     const submit = document.getElementById("c-submit");
-    if (user && myProfile && myProfile.status === "approved") {
+    if (user && myProfile && myProfile.status === "approved" && !myProfile.banned && !myProfile.muted) {
       input.disabled = false;
       input.placeholder = "写下你的想法…";
       submit.hidden = false;
     } else if (user) {
       input.disabled = true;
-      input.placeholder = myProfile && myProfile.status === "pending" ? "账号审核中，通过后可评论" : "账号未通过审核，暂不可评论";
+      input.placeholder = myProfile && myProfile.banned
+        ? "该账号已被封禁，无法评论"
+        : myProfile && myProfile.muted
+          ? "你已被禁言，无法评论"
+          : myProfile && myProfile.status === "pending"
+            ? "账号审核中，通过后可评论"
+            : "账号未通过审核，暂不可评论";
       submit.hidden = true;
     } else {
       input.disabled = true;
@@ -331,6 +341,10 @@
     const submit = document.getElementById("c-submit");
     const text = input.value.trim();
     if (!user) { window.openAuthModal("login"); return; }
+    if (myProfile && (myProfile.banned || myProfile.muted)) {
+      hint("c-hint", myProfile.banned ? "该账号已被封禁，无法评论" : "你已被禁言，无法发表评论");
+      return;
+    }
     if (myProfile && myProfile.status !== "approved") {
       hint("c-hint", myProfile.status === "pending" ? "账号审核中，通过后可评论" : "账号未通过审核，暂不可评论");
       return;
@@ -359,6 +373,10 @@
   }
 
   function doEdit(item) {
+    if (myProfile && (myProfile.banned || myProfile.muted)) {
+      hint("c-hint", myProfile.banned ? "该账号已被封禁，无法操作" : "你已被禁言，无法操作");
+      return;
+    }
     const content = item.querySelector('[data-role="content"]');
     const original = content.textContent;
     content.innerHTML = `<textarea class="edit-area" maxlength="500">${esc(original)}</textarea>`;
@@ -383,6 +401,7 @@
   }
 
   function doDelete(item) {
+    if (myProfile && myProfile.banned) { hint("c-hint", "该账号已被封禁，无法操作"); return; }
     if (!confirm("确定删除这条评论吗？")) return;
     SB.update("comments", { status: "deleted" }, `id=eq.${item.dataset.id}`)
       .then(() => { hint("c-hint", "评论已删除", true); loadComments(); })
@@ -392,6 +411,7 @@
   function doReport(cid) {
     const user = SB.user();
     if (!user) { window.openAuthModal("login"); return; }
+    if (myProfile && myProfile.banned) { alert("该账号已被封禁，无法举报"); return; }
     const reason = prompt("请输入举报原因（如：言语不当）：");
     if (!reason) return;
     SB.insert("reports", { user_id: user.id, comment_id: cid, reason })

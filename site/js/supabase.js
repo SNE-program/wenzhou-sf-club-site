@@ -167,4 +167,8 @@ const SB = {
   remove(table, query) {
     return this.request(`/rest/v1/${table}?${query}`, { method: "DELETE" });
   },
+  // 调用数据库 RPC 函数（如 admin_delete_user / admin_set_banned）
+  rpc(fn, body) {
+    return this.request(`/rest/v1/rpc/${fn}`, { method: "POST", body: JSON.stringify(body || {}) });
+  },
 };

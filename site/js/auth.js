@@ -33,7 +33,7 @@
     try {
       const rows = await SB.get(
         "profiles",
-        `user_id=eq.${user.id}&select=user_id,nickname,status,is_admin`
+        `user_id=eq.${user.id}&select=user_id,nickname,status,is_admin,muted,banned`
       );
       const p = rows[0] || null;
       if (p) localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
@@ -55,6 +55,17 @@
 
     if (user) {
       const profile = await loadProfile();
+      // 封禁账号：不允许登录使用（登出并提示）
+      if (profile && profile.banned) {
+        try { await SB.signOut(); } catch (e) { /* 忽略登出失败 */ }
+        const banLink = document.querySelector("#nav-links a[data-nav-admin]");
+        if (banLink) banLink.remove();
+        area.innerHTML = `
+          <span class="auth-tag rejected" title="该账号已被封禁，如有疑问请联系管理员">已封禁</span>
+          <button class="auth-btn" type="button" id="btn-login">登录 / 注册</button>`;
+        document.getElementById("btn-login").addEventListener("click", () => openModal("login"));
+        return;
+      }
       const nick =
         (profile && profile.nickname) ||
         (user.user_metadata && user.user_metadata.nickname) ||
@@ -211,6 +222,13 @@
         if (isSignup) {
           if (pass.length < 6) throw new Error("密码至少 6 位");
           if (pass !== pass2) throw new Error("两次输入的密码不一致");
+          // 封禁邮箱预检（尽力而为；失败时由数据库注册触发器兜底拦截）
+          try {
+            const emailBlocked = await SB.rpc("check_email_banned", { check_email: email });
+            if (emailBlocked) throw new Error("该邮箱已被封禁，无法注册");
+          } catch (e) {
+            if (e.message === "该邮箱已被封禁，无法注册") throw e;
+          }
           const data = await SB.signUp(email, pass, nick || "星尘");
           if (data.session) {
             // 未开启邮箱确认时的自动登录（保留兼容）

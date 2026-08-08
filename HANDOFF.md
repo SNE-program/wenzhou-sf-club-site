@@ -5,9 +5,9 @@
 
 ## 当前状态
 
-✅ **进程 #18 正文 Markdown 渲染 + Word 附件一键转 Markdown**：① 文章正文渲染改为 **Markdown 优先**（`article.js` `bodyHTML`：`bodyHtml` → Markdown(`body`) → 简介 → 附件提示），`marked` 本地 vendor（`js/vendor/marked.min.js`）渲染，`sanitizeHtml` 剥离 script/iframe/on* 防 XSS；② 投稿页 **「转换为 Markdown」按钮**：选择 `.docx/.docm` 附件后显示，点击后 `mammoth`(Word→HTML) + `turndown`(HTML→Markdown) 纯浏览器本地识别，重写正文 textarea；③ `style.css` 补充正文 Markdown 元素样式（标题/列表/引用/代码/表格/图片/hr）；④ 全站 `style.css?v=12`、文章页引入 marked vendor、`article.js?v=6`。**说明：Pandoc 为系统级二进制，无法在浏览器/Edge Function 沙箱运行，已用等价的纯前端 mammoth+turndown 实现**（已在真实浏览器实测：mammoth→turndown→marked 全链路 ALL OK）。提交 `ae63a37` 已推送（`ca9b2cc..ae63a37`，140.82.113.4 可达）。无需人工部署步骤（vendor 库随静态站走 Pages）。
+✅ **进程 #20 人员管理后台**：新增 `site/admin-users.html` 人员管理页（admin.html 顶部加入口），管理员可对账户执行 **禁言**（muted：禁止评论/表态/举报）、**封禁**（banned：禁止登录互动 + 该邮箱禁止重新注册）、**踢出**（admin_delete_user 删除账户，允许重新注册入站），禁言/封禁可撤销、踢出不可撤销；管理员账号无操作按钮（仅命令工具 `scripts/promote-admin.mjs` / `scripts/revoke-admin.mjs` 添加/移除）。实现：`profiles` 增 `muted`/`banned` 列；新建 `banned` 封禁邮箱表（RLS 开启无策略，仅安全定义者 RPC 可访问）；注册触发器 `handle_new_user` 拦截封禁邮箱 INSERT auth.users；互动守卫触发器 `guard_interaction`（comments/votes/reports 需 approved+未禁言+未封禁）；`guard_profile_update` 保护 muted/banned 字段（非管理员只许改昵称）；RPC `admin_delete_user`/`admin_set_banned`/`check_email_banned`（前两者仅 authenticated+管理员可调，权限已 REVOKE 收紧）。前端 `supabase.js` 新增 `rpc()`；`auth.js` 加载 muted/banned、封禁用户登录即强制登出、注册前预检封禁邮箱；`article.js` 评论/表态/举报/编辑/删除 6 处禁言封禁拦截。迁移脚本 `scripts/user-manage-setup.mjs`（幂等，独立于已过时的 supabase-setup.mjs）。**已推送 main**（见本轮工作表，commit 号见 git log）。**说明：GoTrue 对已存在邮箱的 signup 会短路返回已有用户（不新建账户），封禁邮箱的最终防线是 DB 触发器 RAISE（已实测有效），前端预检为第一道体验层拦截。**
 
-✅ **进程 #17 投稿支持附件 + 封面本地上传**：投稿页封面由 URL 直链改为**本地图片上传**（≤10MB、即时预览），并新增 **1 个任意附件**（≤10MB）。文件通过 Supabase Storage（bucket `uploads`）上传，公开 URL 以 `external` 形式写入 Notion 投稿箱「附件」列；审核列表显示附件链接；审核通过后 Worker 转录附件到作品库「附件」列；文章详情页显示「📎 下载附件」。正文仍为纯文本。提交 `eda610f` 已推送。
+✅ **进程 #18/19 正文 Markdown 渲染 + Word 附件一键转 Markdown + 投稿 20000 字**（见下方记录，均已上线）。
 
 > ⚠️ **进程 #17 人工步骤（必做）**：
 > 1. **Notion 投稿箱加「附件」列**（Files & media 类型）——否则投稿会提示「附件未保存（投稿箱缺少"附件"列）」；
@@ -24,6 +24,18 @@
 > ⚠️ **进程 #16 遗留人工步骤（必做）**：`submit-work` Edge Function 尚未部署（无 Supabase CLI token）。请在 Supabase Dashboard → Edge Functions → `submission-review` → 复制其 Secrets（NOTION_TOKEN / DB_SUBMISSIONS 已有），新建 `submit-work` 粘贴 `scripts/submit-work.ts` 内容并 Deploy。部署后站内投稿才可用（未部署时 submit.html 提交会报"投稿服务未配置"）。
 
 ## 已完成的工作
+
+### 本轮（自动化 AI 进程 #20）工作
+| 项 | 内容 | 结果 |
+|---|---|---|
+| 需求澄清 | 用户要求添加"人员管理"：禁言（不允许评论）、踢出（注销账户、允许重新入站）、封禁（不允许重新入站或提交入站申请），均可撤销（踢出除外）；管理员不可手动增删（仅命令工具） | ✅ |
+| 后端迁移 | `scripts/user-manage-setup.mjs`（幂等）：`profiles` 增 `muted`/`banned`；`banned` 表（RLS 开启无策略）；`handle_new_user` 注册拦截；`guard_interaction` 3 触发器；`guard_profile_update` 保护新列；RPC `admin_delete_user`/`admin_set_banned`/`check_email_banned`；RPC 权限 REVOKE 收紧（仅 authenticated，函数内再验 is_admin） | ✅ 已执行 |
+| 前端 | `supabase.js` 加 `rpc()`；`auth.js` 加载 muted/banned + 封禁即登出 + 注册预检；`article.js` 6 处拦截；`admin-users.html` 新建（列表/标签/禁言/封禁/踢出按钮，管理员行仅提示）；`admin.html` 加入口 | ✅ 代码完成 |
+| 命令工具 | `scripts/revoke-admin.mjs`（移除管理员，与 promote-admin.mjs 同款触发器防护） | ✅ |
+| API 全链路测试 | `_tmp_test_user_manage.mjs`：越权拒绝/禁言拦截/解禁可评论/封禁/表态被拒/预检 RPC/解封/踢出/级联删除/管理员自保护/DB 触发器注册拦截 **14/14 PASS** | ✅ |
+| 根因排查 | 封禁邮箱 signup 返回 200 非触发器失效：**GoTrue 对已存在邮箱短路返回已有用户（不新建账户）**；账户不存在时 DB 触发器 RAISE 实测有效（手动 INSERT 验证） | ✅ 已澄清 |
+| 浏览器验证 | browser_use 子代理：未登录提示→管理员登录→列表/标签/按钮渲染；禁言→已禁言→解禁恢复；封禁→已封禁→解封；踢出→行消失；三次 RPC 调用均成功、无 JS 报错 | ✅ |
+| 提交推送 | 7 文件（4 改 3 新）+ HANDOFF；push 走 curloptResolve IP | ✅ 已推送 |
 
 ### 本轮（自动化 AI 进程 #18）工作
 | 项 | 内容 | 结果 |
