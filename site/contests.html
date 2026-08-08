@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -60,15 +60,28 @@
   <script src="js/auth.js?v=4"></script>
   <!-- 竞赛告示 Markdown 渲染（marked 不可用时降级为段落） -->
   <script src="js/vendor/marked.min.js"></script>
+  <script src="js/vendor/dompurify.min.js"></script>
   <script>
     (async function () {
       // 投稿走站内投稿页（支持附件上传 + Word 转 Markdown + 自动预选所属竞赛）
 
-      // 简单 XSS 过滤：剥离危险元素与事件属性
+      // XSS 过滤：优先 DOMPurify（白名单清洗），保留规则 Word 转出的 inline style（颜色/对齐保真）；不可用时降级为简单剥离
       function sanitizeHtml(html) {
+        const text = String(html == null ? "" : html);
+        if (!text) return "";
+        try {
+          if (window.DOMPurify && typeof window.DOMPurify.sanitize === "function") {
+            return window.DOMPurify.sanitize(text, {
+              USE_PROFILES: { html: true },
+              ADD_ATTR: ["style"],
+              FORBID_TAGS: ["script", "iframe", "object", "embed", "style", "link", "meta", "form", "input", "button", "textarea", "template", "svg", "math"],
+            });
+            // 注：竞赛规则来自管理员 Word 转换（可信内容），保留 inline style 保真；危险 CSS 由 DOMPurify 清洗
+          }
+        } catch (e) { /* DOMPurify 异常时降级 */ }
         try {
           const tpl = document.createElement("template");
-          tpl.innerHTML = html;
+          tpl.innerHTML = text;
           tpl.content
             .querySelectorAll("script,iframe,object,embed,style,link,meta,form,input,button,textarea")
             .forEach((el) => el.remove());
@@ -82,7 +95,7 @@
           });
           return tpl.innerHTML;
         } catch (e) {
-          return String(html).replace(/<[^>]*>/g, "");
+          return text.replace(/<[^>]*>/g, "");
         }
       }
 

@@ -63,6 +63,7 @@
   <script src="js/common.js?v=8"></script>
   <script src="js/api.js?v=5"></script>
   <script src="js/vendor/marked.min.js"></script>
+  <script src="js/vendor/dompurify.min.js"></script>
   <script>
     (async function () {
       const root = document.getElementById("rules");
@@ -71,11 +72,21 @@
         if (!res.ok) throw new Error("HTTP " + res.status);
         const md = await res.text();
 
-        // Markdown → HTML（复用竞赛页的同款渲染与清洗）
+        // Markdown → HTML（复用竞赛页的同款渲染与 DOMPurify 清洗）
         const parse = window.marked && typeof window.marked.parse === "function" ? window.marked.parse : null;
         if (parse) {
+          let html;
+          try {
+            html = window.DOMPurify && typeof window.DOMPurify.sanitize === "function"
+              ? window.DOMPurify.sanitize(parse(md, { breaks: true, gfm: true }), {
+                  USE_PROFILES: { html: true },
+                  FORBID_ATTR: ["style"],
+                  FORBID_TAGS: ["script", "iframe", "object", "embed", "style", "link", "meta", "form", "input", "button", "textarea", "template", "svg", "math"],
+                })
+              : parse(md, { breaks: true, gfm: true });
+          } catch (e) { html = parse(md, { breaks: true, gfm: true }); }
           const tpl = document.createElement("template");
-          tpl.innerHTML = parse(md, { breaks: true, gfm: true });
+          tpl.innerHTML = html;
           // 移除 markdown 顶部大标题与紧跟的分隔线（页头已展示标题）
           const firstH1 = tpl.content.querySelector("h1");
           if (firstH1) {

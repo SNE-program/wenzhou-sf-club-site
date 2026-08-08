@@ -68,11 +68,23 @@
   }
 
   // ---------- 正文渲染 ----------
-  // 简单 XSS 过滤：剥离脚本/iframe/表单等危险元素与事件属性
-  function sanitizeHtml(html) {
+  // XSS 过滤：优先使用 DOMPurify（白名单清洗，覆盖事件属性/危险协议/mXSS），不可用时降级为简单剥离
+  // allowStyle=true 用于服务端 Word 转换产物（保留 inline style 渲染保真）；评论/正文 Markdown 走严格模式（禁止 style）
+  function sanitizeHtml(html, allowStyle) {
+    const text = String(html == null ? "" : html);
+    if (!text) return "";
+    try {
+      if (window.DOMPurify && typeof window.DOMPurify.sanitize === "function") {
+        return window.DOMPurify.sanitize(text, {
+          USE_PROFILES: { html: true },
+          ...(allowStyle ? { ADD_ATTR: ["style"] } : { FORBID_ATTR: ["style"] }),
+          FORBID_TAGS: ["script", "iframe", "object", "embed", "style", "link", "meta", "form", "input", "button", "textarea", "template", "svg", "math"],
+        });
+      }
+    } catch (e) { /* DOMPurify 异常时降级 */ }
     try {
       const tpl = document.createElement("template");
-      tpl.innerHTML = html;
+      tpl.innerHTML = text;
       tpl.content
         .querySelectorAll("script,iframe,object,embed,style,link,meta,form,input,button,textarea")
         .forEach((el) => el.remove());
@@ -86,7 +98,7 @@
       });
       return tpl.innerHTML;
     } catch (e) {
-      return String(html).replace(/<[^>]*>/g, "");
+      return text.replace(/<[^>]*>/g, "");
     }
   }
 
@@ -104,7 +116,7 @@
   function bodyHTML(article) {
     const placeholder = /^(见附件|详见附件|附件见文件|暂无|无)$/i;
     const pick = (s) => { const t = (s || "").trim(); return placeholder.test(t) ? "" : t; };
-    if (article.bodyHtml && String(article.bodyHtml).trim()) return sanitizeHtml(article.bodyHtml);
+    if (article.bodyHtml && String(article.bodyHtml).trim()) return sanitizeHtml(article.bodyHtml, true);
     const text = pick(article.body) || pick(article.summary);
     if (text) return renderMarkdown(text);
     if (article.attachment && article.attachment.url)
