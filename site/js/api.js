@@ -75,7 +75,7 @@ function coverText(title) {
 }
 
 function dateLabel(dateStr) {
-  if (!dateStr) return "";
+  if (!dateStr) return "未定";
   const d = new Date(dateStr);
   if (isNaN(d)) return dateStr;
   const p = (n) => String(n).padStart(2, "0");

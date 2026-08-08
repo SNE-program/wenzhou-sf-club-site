@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -47,7 +47,7 @@
   <div data-footer></div>
 
   <script src="js/common.js?v=8"></script>
-  <script src="js/api.js?v=5"></script>
+  <script src="js/api.js?v=6"></script>
   <script src="js/supabase.js?v=8"></script>
   <script src="js/auth.js?v=15"></script>
   <script>
@@ -75,7 +75,7 @@
       ].filter(Boolean).join(" ").toLowerCase();
     }
 
-    function renderList(items, kw) {
+    function renderList(items, kw, showDate) {
       return items.map((it) => `
         <a class="card" href="articles/${encodeURIComponent(it.id)}.html">
           <div class="card-cover" style="${coverStyle(it, it.title)}"><span class="cover-title">${esc(coverText(it.title))}</span></div>
@@ -85,7 +85,7 @@
             <div class="card-meta">
               ${it.category ? `<span>${esc(it.category)}</span>` : ""}
               ${it.location ? `<span>${esc(it.location)}</span>` : ""}
-              ${it.date ? `<span>${esc(dateLabel(it.date))}</span>` : ""}
+              ${showDate ? `<span>${esc(dateLabel(it.date))}</span>` : ""}
               ${it.tags && it.tags.length ? it.tags.slice(0, 2).map((t) => `<span>#${esc(t)}</span>`).join("") : ""}
             </div>
           </div>
@@ -114,10 +114,10 @@
         }
         let html = "";
         if (hitWorks.length) {
-          html += `<h2 class="search-group-title">作品<span class="cnt">${hitWorks.length}</span></h2><div class="grid">${renderList(hitWorks, q)}</div>`;
+          html += `<h2 class="search-group-title">作品<span class="cnt">${hitWorks.length}</span></h2><div class="grid">${renderList(hitWorks, q, false)}</div>`;
         }
         if (hitActs.length) {
-          html += `<h2 class="search-group-title">活动<span class="cnt">${hitActs.length}</span></h2><div class="grid">${renderList(hitActs, q)}</div>`;
+          html += `<h2 class="search-group-title">活动<span class="cnt">${hitActs.length}</span></h2><div class="grid">${renderList(hitActs, q, true)}</div>`;
         }
         box.innerHTML = html;
       } catch (e) {

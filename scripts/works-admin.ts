@@ -26,6 +26,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const NOTION_TOKEN = (Deno.env.get("NOTION_TOKEN") ?? "").trim();
 const NOTION_VERSION = "2022-06-28";
 const DB_WORKS = (Deno.env.get("DB_WORKS") ?? "3b339fd6-4004-8111-aac9-cf77c0c99eab").trim();
+const DB_SUBMISSIONS = (Deno.env.get("DB_SUBMISSIONS") ?? "3b439fd6-4004-8093-b745-c8ee4f27c1a0").trim();
 
 // 中文字符串常量（\uXXXX 转义，粘贴安全）
 const S = {
@@ -36,6 +37,8 @@ const S = {
   author: "\u4f5c\u8005", // 作者
   category: "\u5206\u7c7b", // 分类
   summary: "\u7b80\u4ecb", // 简介
+  email: "\u90ae\u7bb1", // 邮箱
+  workId: "\u4f5c\u54c1ID", // 作品ID
   notLogin: "\u672a\u767b\u5f55", // 未登录
   noAdmin: "\u65e0\u7ba1\u7406\u5458\u6743\u9650", // 无管理员权限
   missingArgs: "\u7f3a\u5c11\u53c2\u6570 action/id", // 缺少参数 action/id
@@ -55,24 +58,26 @@ async function throwWithDetail(prefix, res) {
   throw new Error(`${prefix} ${res.status}${detail ? ": " + detail.slice(0, 300) : ""}`);
 }
 
+/** 读取 Notion 属性文本 */
+function propText(p, key) {
+  const v = p[key];
+  if (!v) return "";
+  if (v.type === "title") return v.title.map((t) => t.plain_text).join("");
+  if (v.type === "rich_text") return v.rich_text.map((t) => t.plain_text).join("");
+  if (v.type === "select") return v.select ? v.select.name : "";
+  return "";
+}
+
 /** Notion 行 → 前端字段 */
 function mapRow(row) {
   const p = row.properties || {};
-  const text = (k) => {
-    const v = p[k];
-    if (!v) return "";
-    if (v.type === "title") return v.title.map((t) => t.plain_text).join("");
-    if (v.type === "rich_text") return v.rich_text.map((t) => t.plain_text).join("");
-    if (v.type === "select") return v.select ? v.select.name : "";
-    return "";
-  };
   return {
     id: row.id,
-    title: text(S.title),
-    author: text(S.author),
-    category: text(S.category),
-    summary: text(S.summary),
-    status: text(S.status) || S.up,
+    title: propText(p, S.title),
+    author: propText(p, S.author),
+    category: propText(p, S.category),
+    summary: propText(p, S.summary),
+    status: propText(p, S.status) || S.up,
     created: row.created_time || "",
   };
 }
@@ -106,17 +111,36 @@ export default {
       return Response.json({ error: "works-admin not configured (NOTION_TOKEN)" }, { status: 501 });
     }
 
-    // GET：全部作品列表
+    // GET：全部作品列表（含投稿邮箱，来自投稿箱按作品ID关联）
     if (req.method === "GET") {
       try {
-        const res = await fetch(`https://api.notion.com/v1/databases/${DB_WORKS}/query`, {
-          method: "POST",
-          headers: notionHeaders(),
-          body: JSON.stringify({ page_size: 100 }),
-        });
-        if (!res.ok) await throwWithDetail("query failed", res);
-        const rows = (await res.json()).results || [];
-        return Response.json(rows.map(mapRow));
+        const [worksRes, subsRes] = await Promise.all([
+          fetch(`https://api.notion.com/v1/databases/${DB_WORKS}/query`, {
+            method: "POST",
+            headers: notionHeaders(),
+            body: JSON.stringify({ page_size: 100 }),
+          }),
+          fetch(`https://api.notion.com/v1/databases/${DB_SUBMISSIONS}/query`, {
+            method: "POST",
+            headers: notionHeaders(),
+            body: JSON.stringify({ page_size: 100 }),
+          }),
+        ]);
+        if (!worksRes.ok) await throwWithDetail("query works failed", worksRes);
+        if (!subsRes.ok) await throwWithDetail("query submissions failed", subsRes);
+        const worksRows = (await worksRes.json()).results || [];
+        const subRows = (await subsRes.json()).results || [];
+        // 作品库无邮箱列：作品ID → 投稿邮箱（转录发布时回填的作品ID关联）
+        const emailByWorkId = {};
+        for (const r of subRows) {
+          const p = r.properties || {};
+          const workId = propText(p, S.workId);
+          const email = propText(p, S.email);
+          if (workId && email) emailByWorkId[workId] = email;
+        }
+        return Response.json(
+          worksRows.map(mapRow).map((w) => ({ ...w, email: emailByWorkId[w.id] || "" }))
+        );
       } catch (e) {
         return Response.json({ error: e.message }, { status: 502 });
       }

@@ -128,7 +128,7 @@
   function renderArticle() {
     const box = document.getElementById("detail");
     const metaBits = [];
-    if (article.date) metaBits.push(`📅 ${esc(dateLabel(article.date))}`);
+    if (TYPE === "activities") metaBits.push(`📅 ${esc(dateLabel(article.date))}`);
     if (article.location) metaBits.push(`📍 ${esc(article.location)}`);
     if (article.category) {
       metaBits.push(
