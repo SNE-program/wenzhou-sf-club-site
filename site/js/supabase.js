@@ -83,7 +83,11 @@ const SB = {
       method: "POST",
       body: JSON.stringify({ email, password, data: { nickname } }),
     });
-    if (data.session) this.saveSession(data.session);
+    if (data.session) {
+      this.saveSession(data.session);
+      // 通知界面（submit.html 等）从“未登录”切换到“已登录”
+      window.dispatchEvent(new CustomEvent("sb-auth-changed"));
+    }
     return data;
   },
   async signIn(email, password) {
@@ -92,6 +96,7 @@ const SB = {
       body: JSON.stringify({ email, password }),
     });
     this.saveSession(data);
+    window.dispatchEvent(new CustomEvent("sb-auth-changed"));
     return data;
   },
   async signOut() {

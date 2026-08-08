@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -45,7 +45,7 @@
   <script src="js/auth.js?v=2"></script>
   <script>
     (async function () {
-      const SUBMIT_URL = "https://wax-green-237.notion.site/3b439fd6400480759e39dddbed343162?pvs=105";
+      // 投稿走站内投稿页（支持附件上传 + Word 转 Markdown + 自动预选所属竞赛）
 
       // 优先读 Supabase（在线管理的内容），失败/为空则降级 Notion/本地数据
       async function loadContests() {
@@ -77,7 +77,7 @@
           ${c.rules ? `<div class="contest-sec"><h3>参赛规则</h3><p>${esc(c.rules)}</p></div>` : ""}
           ${c.awards ? `<div class="contest-sec"><h3>奖项设置</h3><p>${esc(c.awards)}</p></div>` : ""}
           ${c.winners ? `<div class="contest-sec"><h3>获奖名单</h3><p>${esc(c.winners)}</p></div>` : ""}
-          ${c.status === "报名中" ? `<p style="margin-top:1.25rem"><a class="btn" href="${SUBMIT_URL}" target="_blank" rel="noopener">前往投稿箱投稿</a></p>` : ""}
+          ${c.status === "报名中" ? `<p style="margin-top:1.25rem"><a class="btn" href="submit.html?contest=${encodeURIComponent(c.title)}">前往投稿</a></p>` : ""}
         </article>`).join("");
     })().catch((e) => {
       document.getElementById("contests").innerHTML = `<div class="state">竞赛信息加载失败，请稍后刷新重试。</div>`;

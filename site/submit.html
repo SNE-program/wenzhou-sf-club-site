@@ -190,6 +190,21 @@
         opt.addEventListener("click", () => opt.classList.toggle("on"));
       });
 
+      // 来自竞赛页的投稿入口：?contest=xxx 自动预选「所属竞赛」
+      const preselect = new URLSearchParams(location.search).get("contest");
+      if (preselect) {
+        const box = document.getElementById("s-contests");
+        const target = box && [...box.querySelectorAll(".s-opt")].find((el) => el.dataset.v === preselect);
+        if (target) {
+          target.classList.add("on");
+        } else if (box) {
+          const note = document.createElement("p");
+          note.className = "s-hint";
+          note.textContent = `「${preselect}」已结束或不存在，仍可按普通作品投稿。`;
+          box.insertAdjacentElement("beforebegin", note);
+        }
+      }
+
       const form = document.getElementById("submit-form");
       const errEl = document.getElementById("s-err");
       const okEl = document.getElementById("s-ok");
