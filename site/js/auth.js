@@ -24,17 +24,6 @@
     return null;
   }
 
-  // 登录输入解析：邮箱直接返回；昵称则经专用 RPC 反查其绑定的邮箱
-  // （profiles 表 RLS 已收紧为本人/管理员可见，匿名仅可走该单查接口）
-  async function resolveAccount(input) {
-    if (/^\S+@\S+\.\S+$/.test(input)) return input;
-    const email = await SB.rpc("resolve_login_email", { p_nickname: input });
-    if (!email) {
-      throw new Error(`未找到昵称为「${input}」的账号`);
-    }
-    return email;
-  }
-
   // 顶部轻提示（邮箱验证结果等），自带样式，无需改 CSS 版本号
   function showToast(msg, kind = "ok") {
     const old = document.getElementById("auth-toast");
@@ -159,7 +148,7 @@
           <button type="button" class="tab" data-mode="signup">注册</button>
         </div>
         <form class="modal-form" id="auth-form">
-          <label>邮箱或昵称<input type="text" id="f-email" required placeholder="you@example.com 或 昵称" autocomplete="username"></label>
+          <label>邮箱<input type="email" id="f-email" required placeholder="you@example.com" autocomplete="email"></label>
           <label>昵称<span class="only-signup">（用于展示）</span><input type="text" id="f-nick" class="only-signup" placeholder="如：星尘" maxlength="20"></label>
           <label>学号<span class="only-signup">（在校学生必填）</span><input type="text" id="f-sid" class="only-signup" placeholder="学号，如 27xxxx08" maxlength="20" autocomplete="off"></label>
           <label>姓名<span class="only-signup">（须与在校名册一致）</span><input type="text" id="f-real" class="only-signup" placeholder="真实姓名" maxlength="20" autocomplete="off"></label>
@@ -322,8 +311,7 @@
             errEl.hidden = false;
           }
         } else {
-          const account = await resolveAccount(email);
-          await SB.signIn(account, pass);
+          await SB.signIn(email, pass);
           closeModal();
           await render();
         }
