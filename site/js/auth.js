@@ -24,17 +24,15 @@
     return null;
   }
 
-  // 登录输入解析：邮箱直接返回；昵称则反查其绑定的邮箱（昵称已全站唯一）
+  // 登录输入解析：邮箱直接返回；昵称则经专用 RPC 反查其绑定的邮箱
+  // （profiles 表 RLS 已收紧为本人/管理员可见，匿名仅可走该单查接口）
   async function resolveAccount(input) {
     if (/^\S+@\S+\.\S+$/.test(input)) return input;
-    const rows = await SB.get(
-      "profiles",
-      `nickname=eq.${encodeURIComponent(input)}&select=email&limit=1`
-    );
-    if (!rows || !rows[0] || !rows[0].email) {
+    const email = await SB.rpc("resolve_login_email", { p_nickname: input });
+    if (!email) {
       throw new Error(`未找到昵称为「${input}」的账号`);
     }
-    return rows[0].email;
+    return email;
   }
 
   // 顶部轻提示（邮箱验证结果等），自带样式，无需改 CSS 版本号
