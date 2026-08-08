@@ -2670,12 +2670,8 @@ html.minimal .hero p {
 html.minimal .hero-cta { justify-content: flex-start; animation: none; }
 html.minimal .hero-scroll { display: none; }
 
-/* 卡片：去掉封面图 / 光斑 / 角标 / 位移动画，退化为列表条目 */
-html.minimal .card-cover,
-html.minimal .detail-cover,
-html.minimal .submit-cover,
-html.minimal .card-cover::before,
-html.minimal .card-cover::after { display: none !important; }
+/* 卡片：封面图片（活动 / 作品，含详情页）予以保留；仅隐藏投稿预览封面 */
+html.minimal .submit-cover { display: none !important; }
 
 html.minimal .card {
   border-radius: 4px;

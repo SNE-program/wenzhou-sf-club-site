@@ -165,7 +165,7 @@ ${meta("twitter:card", "summary_large_image")}
     })();
   </script>
   <base href="../">
-  <link rel="stylesheet" href="css/style.css?v=19">
+  <link rel="stylesheet" href="css/style.css?v=20">
 </head>
 <body>
   <div data-nav></div>
