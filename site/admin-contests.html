@@ -91,22 +91,19 @@
                 <label class="c-field">排序<input type="number" name="sort_order" value="${v("sort_order") ?? 0}" step="1"></label>
               </div>
               <label class="c-field">主题<textarea name="topic" rows="2">${esc(v("topic"))}</textarea></label>
-              <label class="c-field">参赛规则<textarea name="rules" rows="4">${esc(v("rules"))}</textarea></label>
+              <label class="c-field">参赛规则（告示内容）<textarea name="rules" id="c-rules" rows="6">${esc(v("rules"))}</textarea></label>
               <label class="c-field">奖项设置<textarea name="awards" rows="2">${esc(v("awards"))}</textarea></label>
               <label class="c-field">获奖名单<textarea name="winners" rows="2">${esc(v("winners"))}</textarea></label>
               <div class="c-field">
-                <span style="display:block;margin-bottom:0.1rem">竞赛告示（附件）</span>
+                <span style="display:block;margin-bottom:0.1rem">告示附件（Word）</span>
                 <div class="file-pick">
                   <label class="btn ghost file-btn" for="c-attach">选择 Word 告示</label>
                   <input type="file" id="c-attach" accept=".docx,.docm" hidden>
                   <span class="c-fname" id="c-attach-name">${item && item.attachment_name ? esc(item.attachment_name) : "未选择文件"}</span>
                 </div>
                 <button class="btn ghost" type="button" id="c-to-md" style="margin-top:0.5rem">转换为 Markdown</button>
-                <span class="c-hint" id="c-attach-hint">可选。上传 Word 告示（.docx / .docm），保存后会在竞赛页提供下载；点「转换为 Markdown」可把正文识别到下方「告示内容」。</span>
+                <span class="c-hint" id="c-attach-hint">可选。上传 Word 告示（.docx / .docm），保存后会在竞赛页提供下载；点「转换为 Markdown」可把正文识别到上方「参赛规则」。</span>
               </div>
-              <label class="c-field">告示内容（Markdown）
-                <textarea name="notice" id="c-notice" rows="6">${esc(v("notice"))}</textarea>
-              </label>
               <div class="c-actions">
                 <button class="btn" type="submit">${item ? "保存修改" : "创建竞赛"}</button>
                 <button class="c-btn" type="button" id="form-cancel">取消</button>
@@ -207,11 +204,11 @@
               const { value: html } = await window.mammoth.convertToHtml({ arrayBuffer });
               const md = new window.TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" }).turndown(html);
               if (!md.trim()) throw new Error("未识别到文字内容");
-              const noticeEl = document.getElementById("c-notice");
-              noticeEl.value = md.trim() + "\n";
-              hintEl.textContent = `已把《${f.name}》识别为 Markdown 写入「告示内容」，请检查后保存。`;
+              const rulesEl = document.getElementById("c-rules");
+              rulesEl.value = md.trim() + "\n";
+              hintEl.textContent = `已把《${f.name}》识别为 Markdown 写入「参赛规则」，请检查后保存。`;
             } catch (err) {
-              hintEl.textContent = "转换失败：" + (err.message || "未知错误") + "。也可直接复制文本粘贴到「告示内容」。";
+              hintEl.textContent = "转换失败：" + (err.message || "未知错误") + "。也可直接复制文本粘贴到「参赛规则」。";
             } finally {
               toMd.disabled = false;
               toMd.textContent = "转换为 Markdown";
@@ -232,7 +229,6 @@
             rules: fd.get("rules").trim(),
             awards: fd.get("awards").trim(),
             winners: fd.get("winners").trim(),
-            notice: (fd.get("notice") || "").trim(),
           };
           if (!body.title) return;
           const btn = form.querySelector("button[type=submit]");

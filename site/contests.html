@@ -82,7 +82,7 @@
         }
       }
 
-      // Markdown → HTML（告示内容为管理后台 Word 转出的 Markdown）
+      // Markdown → HTML（参赛规则/告示内容为管理后台 Word 转出的 Markdown）
       function renderMarkdown(src) {
         const md = window.marked && typeof window.marked.parse === "function" ? window.marked.parse : null;
         const text = String(src == null ? "" : src);
@@ -118,10 +118,9 @@
           <div class="contest-meta">
             ${c.deadline ? `<span>⏰ 投稿截止：${esc(c.deadline)}</span>` : ""}
           </div>
-          ${c.notice ? `<div class="contest-sec"><h3>竞赛告示</h3><div class="md">${renderMarkdown(c.notice)}</div></div>` : ""}
-          ${c.attachment_url ? `<p style="margin-top:1rem"><a class="btn ghost" href="${esc(c.attachment_url)}" target="_blank" rel="noopener">下载告示附件${c.attachment_name ? `（${esc(c.attachment_name)}）` : ""}</a></p>` : ""}
           ${c.topic ? `<div class="contest-sec"><h3>主题</h3><p>${esc(c.topic)}</p></div>` : ""}
-          ${c.rules ? `<div class="contest-sec"><h3>参赛规则</h3><p>${esc(c.rules)}</p></div>` : ""}
+          ${c.rules ? `<div class="contest-sec"><h3>参赛规则</h3><div class="md">${renderMarkdown(c.rules)}</div></div>` : ""}
+          ${c.attachment_url ? `<p style="margin-top:1rem"><a class="btn ghost" href="${esc(c.attachment_url)}" target="_blank" rel="noopener">下载告示附件${c.attachment_name ? `（${esc(c.attachment_name)}）` : ""}</a></p>` : ""}
           ${c.awards ? `<div class="contest-sec"><h3>奖项设置</h3><p>${esc(c.awards)}</p></div>` : ""}
           ${c.winners ? `<div class="contest-sec"><h3>获奖名单</h3><p>${esc(c.winners)}</p></div>` : ""}
           ${c.status === "报名中" ? `<p style="margin-top:1.25rem"><a class="btn" href="submit.html?contest=${encodeURIComponent(c.title)}">前往投稿</a></p>` : ""}
