@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -16,6 +16,7 @@
     })();
   </script>
   <link rel="stylesheet" href="css/style.css?v=23">
+  <link rel="stylesheet" href="css/admin.css?v=1">
   <!-- Word 告示转 Markdown（本地 vendor，仅用到「转换为 Markdown」时加载） -->
   <script src="js/vendor/mammoth.min.js"></script>
   <script src="js/vendor/turndown.min.js"></script>
@@ -34,7 +35,7 @@
       <h1>竞赛管理</h1>
       <div class="sub">在线编辑竞赛信息，保存后网站立即更新。内容会写入网站数据库，替代 Notion 竞赛页。</div>
     </div>
-    <p><a class="back-link" href="admin.html">← 返回入站审核</a></p>
+    <div id="admin-nav"></div>
 
     <div id="admin-root">
       <div class="state"><div class="spinner"></div>正在加载……</div>
@@ -47,6 +48,7 @@
   <script src="js/api.js?v=6"></script>
   <script src="js/supabase.js?v=8"></script>
   <script src="js/auth.js?v=15"></script>
+  <script src="js/admin.js?v=1"></script>
   <script>
     // 登录/登出后整页重建（表单依赖登录态，避免停留在未登录占位页）
     window.addEventListener("sb-auth-changed", () => location.reload());
@@ -64,6 +66,8 @@
         root.innerHTML = `<div class="state">你没有管理权限。</div>`;
         return;
       }
+      const stats = await window.loadTodoStats();
+      window.adminNav("admin-contests.html", stats);
 
       let rows = [];
       try {
@@ -99,16 +103,16 @@
               <div class="c-field">
                 <span style="display:block;margin-bottom:0.1rem">告示附件（Word）</span>
                 <div class="file-pick">
-                  <label class="btn ghost file-btn" for="c-attach">选择 Word 告示</label>
+                  <label class="a-btn ghost file-btn" for="c-attach">选择 Word 告示</label>
                   <input type="file" id="c-attach" accept=".docx,.docm" hidden>
                   <span class="c-fname" id="c-attach-name">${item && item.attachment_name ? esc(item.attachment_name) : "未选择文件"}</span>
                 </div>
-                <button class="btn ghost" type="button" id="c-to-md" style="margin-top:0.5rem">转换为 Markdown</button>
+                <button class="a-btn ghost" type="button" id="c-to-md" style="margin-top:0.5rem">转换为 Markdown</button>
                 <span class="c-hint" id="c-attach-hint">可选。上传 Word 告示（.docx / .docm），保存后会在竞赛页提供下载；点「转换为 Markdown」可把正文识别到上方「参赛规则」。</span>
               </div>
               <div class="c-actions">
-                <button class="btn" type="submit">${item ? "保存修改" : "创建竞赛"}</button>
-                <button class="c-btn" type="button" id="form-cancel">取消</button>
+                <button class="a-btn" type="submit">${item ? "保存修改" : "创建竞赛"}</button>
+                <button class="a-btn ghost" type="button" id="form-cancel">取消</button>
               </div>
             </form>
           </div>`;
@@ -117,21 +121,25 @@
       function render() {
         root.innerHTML = `
           <div class="c-toolbar">
-            <span class="audit-count">共 <b>${rows.length}</b> 场竞赛</span>
-            <button class="btn" id="btn-new" type="button">＋ 新建竞赛</button>
+            <span class="a-count" style="margin:0">共 <b>${rows.length}</b> 场竞赛</span>
+            <button class="a-btn" id="btn-new" type="button">＋ 新建竞赛</button>
           </div>
           <div id="form-wrap" hidden></div>
           <div id="contest-list">
             ${rows.length
               ? rows.map((c) => `
-                <div class="contest-item" data-id="${c.id}">
-                  <div class="contest-info">
-                    <div class="c-head"><b>${esc(c.title)}</b><span class="status-badge s-${esc(c.status)}">${esc(c.status)}</span></div>
-                    <div class="c-meta">${c.deadline ? `截止 ${esc(c.deadline)}` : ""}${c.sort_order ? ` · 排序 ${c.sort_order}` : ""}</div>
+                <div class="a-card" data-id="${c.id}">
+                  <div class="a-card-main">
+                    <div class="a-card-title">${esc(c.title)} <span class="status-badge s-${esc(c.status)}">${esc(c.status)}</span></div>
+                    <div class="a-card-meta">
+                      ${c.deadline ? `<span>截止 ${esc(c.deadline)}</span>` : `<span>截止 未定</span>`}
+                      ${c.sort_order ? `<span>排序 ${c.sort_order}</span>` : ""}
+                      ${c.topic ? `<span>${esc(String(c.topic).slice(0, 60))}</span>` : ""}
+                    </div>
                   </div>
-                  <div class="c-actions">
-                    <button class="btn audit-pass" type="button" data-act="edit">编辑</button>
-                    <button class="c-btn audit-reject" type="button" data-act="del">删除</button>
+                  <div class="a-card-actions">
+                    <button class="a-btn" type="button" data-act="edit">编辑</button>
+                    <button class="a-btn danger" type="button" data-act="del">删除</button>
                   </div>
                 </div>`).join("")
               : `<div class="state">还没有竞赛，点「新建竞赛」创建第一场。</div>`}
@@ -145,7 +153,7 @@
           wrap.scrollIntoView({ behavior: "smooth" });
         });
 
-        document.querySelectorAll("#contest-list .contest-item").forEach((item) => {
+        document.querySelectorAll("#contest-list .a-card").forEach((item) => {
           const id = item.dataset.id;
           const c = rows.find((r) => r.id === id);
           item.querySelector('[data-act="edit"]').addEventListener("click", () => {
@@ -156,13 +164,21 @@
             wrap.scrollIntoView({ behavior: "smooth" });
           });
           item.querySelector('[data-act="del"]').addEventListener("click", async () => {
-            if (!confirm(`确认删除「${c.title}」吗？此操作不可恢复。`)) return;
+            const ok = await window.adminConfirm({
+              title: `确认删除「${c.title}」？`,
+              message: "此操作不可恢复。",
+              danger: true,
+              okText: "删除",
+            });
+            if (!ok) return;
+            item.querySelectorAll("button").forEach((b) => (b.disabled = true));
             try {
               await SB.remove("contests", `id=eq.${id}`);
               rows = rows.filter((r) => r.id !== id);
               render();
             } catch (e) {
               alert("删除失败：" + e.message);
+              item.querySelectorAll("button").forEach((b) => (b.disabled = false));
             }
           });
         });

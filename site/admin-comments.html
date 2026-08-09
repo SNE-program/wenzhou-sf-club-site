@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -16,6 +16,7 @@
     })();
   </script>
   <link rel="stylesheet" href="css/style.css?v=23">
+  <link rel="stylesheet" href="css/admin.css?v=1">
 </head>
 <body>
   <div data-nav></div>
@@ -24,10 +25,11 @@
     <div class="page-head">
       <h1>评论管理</h1>
       <div class="sub">按文章查看评论，可删除（隐藏，不可恢复）或拉黑违规用户。</div>
-      <p style="margin-top:1rem"><a class="btn" href="admin-reports.html">举报处理</a> <a class="btn" href="admin.html">入站审核</a> <a class="btn" href="admin-submissions.html">投稿审核</a> <a class="btn" href="admin-contests.html">管理竞赛</a></p>
     </div>
+    <div id="admin-nav"></div>
+
     <div class="c-toolbar" id="toolbar" hidden>
-      <div class="c-grid" style="grid-template-columns:auto auto 1fr;margin:0">
+      <div class="c-grid" style="grid-template-columns:auto auto 1fr;margin:0;flex:1">
         <label class="c-field" style="margin:0">文章
           <select id="f-article"><option value="">全部</option></select>
         </label>
@@ -54,6 +56,7 @@
   <script src="js/api.js?v=6"></script>
   <script src="js/supabase.js?v=8"></script>
   <script src="js/auth.js?v=15"></script>
+  <script src="js/admin.js?v=1"></script>
   <script>
     function timeLabel(iso) {
       if (!iso) return "";
@@ -80,6 +83,8 @@
         root.innerHTML = `<div class="state">你没有管理权限。</div>`;
         return;
       }
+      const stats = await window.loadTodoStats();
+      window.adminNav("admin-comments.html", stats);
 
       // 文章标题映射
       let articleMap = {};
@@ -128,30 +133,29 @@
           return;
         }
         root.innerHTML = `
-          <div class="audit-count">共 <b>${list.length}</b> 条（全部评论 ${comments.length} 条）</div>
+          <div class="a-count">共 <b>${list.length}</b> 条（全部评论 ${comments.length} 条）</div>
           ${list.map((c) => {
             const p = profilesById[c.user_id] || {};
             const art = articleMap[c.article_id];
             const banned = p.status === "rejected";
             return `
-            <div class="audit-item comment-row" data-id="${c.id}" data-uid="${c.user_id}">
-              <div class="audit-info" style="flex-direction:column;align-items:flex-start;gap:.35rem;flex:1">
-                <div class="c-head">
-                  <span class="c-nick">${esc(p.nickname || "（用户）")}</span>
+            <div class="a-card comment-row" data-id="${c.id}" data-uid="${c.user_id}">
+              <div class="a-card-main">
+                <div class="a-card-title">${esc(p.nickname || "（用户）")}
                   ${banned ? `<span class="status-badge">已拉黑</span>` : (p.status === "pending" ? `<span class="status-badge">待审核</span>` : "")}
-                  <span class="c-time">${esc(timeLabel(c.created_at))}</span>
-                  ${c.edited_at ? `<span class="c-edited">已编辑</span>` : ""}
                 </div>
-                <div class="c-meta">
-                  ${art ? `<a class="meta-link" href="articles/${encodeURIComponent(c.article_id)}.html" target="_blank">📄 ${esc(art.title)}</a>` : `<span class="c-time">文章 ${esc(c.article_id)}</span>`}
+                <div class="a-card-meta">
+                  <span>${esc(timeLabel(c.created_at))}</span>
+                  ${c.edited_at ? `<span>已编辑</span>` : ""}
+                  ${art ? `<a class="meta-link" href="articles/${encodeURIComponent(c.article_id)}.html" target="_blank">📄 ${esc(art.title)}</a>` : `<span>文章 ${esc(c.article_id)}</span>`}
                 </div>
-                <div class="c-content" style="color:var(--text)">${esc(preview(c.content, 120))}</div>
+                <div class="a-card-text">${esc(preview(c.content, 120))}</div>
               </div>
-              <div class="c-actions">
+              <div class="a-card-actions">
                 ${c.status === "active"
-                  ? `<button class="c-btn" data-act="hide" type="button">删除</button>`
-                  : `<span class="c-time">已删除</span>`}
-                ${!banned && c.user_id !== me.user_id ? `<button class="c-btn" data-act="ban" type="button">拉黑</button>` : ""}
+                  ? `<button class="a-btn warn" data-act="hide" type="button">删除</button>`
+                  : `<span class="a-count">已删除</span>`}
+                ${!banned && c.user_id !== me.user_id ? `<button class="a-btn danger" data-act="ban" type="button">拉黑</button>` : ""}
               </div>
             </div>`;
           }).join("")}`;
@@ -165,23 +169,46 @@
       }
 
       async function handle(id, uid, act, row) {
+        const nick = (profilesById[uid] || {}).nickname || "该用户";
         if (act === "hide") {
-          if (!confirm("删除（隐藏）这条评论？")) return;
-          await SB.update("comments", { status: "deleted" }, `id=eq.${id}`);
+          const ok = await window.adminConfirm({
+            title: "删除（隐藏）这条评论？",
+            message: "评论将不再显示（不可恢复），用户本身不受影响。",
+            danger: true,
+            okText: "删除",
+          });
+          if (!ok) return;
         } else if (act === "ban") {
-          const nick = (profilesById[uid] || {}).nickname || "该用户";
-          if (!confirm(`拉黑「${nick}」？\n其评论将全部隐藏，且无法再评论、表态、举报。`)) return;
-          await SB.update("profiles", { status: "rejected" }, `user_id=eq.${uid}`);
-          await SB.update("comments", { status: "deleted" }, `user_id=eq.${uid}&status=eq.active`);
-          const uids = await SB.get("comments", `user_id=eq.${uid}&select=id`);
-          const cids = uids.map((x) => x.id);
-          const idParts = [`user_id=eq.${uid}`];
-          if (cids.length) idParts.push(`comment_id=in.(${cids.join(",")})`);
-          await SB.update("reports", { status: "resolved" }, idParts.join("&") + "&status=eq.pending");
+          const ok = await window.adminConfirm({
+            title: `拉黑「${nick}」？`,
+            message: "其评论将全部隐藏，且无法再评论、表态、举报。",
+            danger: true,
+            okText: "拉黑",
+          });
+          if (!ok) return;
         }
-        // 重新加载（拉黑会连带删除多条评论）
-        try { await load(); } catch (e) { /* 保留旧数据 */ }
-        render();
+        row.querySelectorAll("button").forEach((b) => (b.disabled = true));
+        try {
+          if (act === "hide") {
+            await SB.update("comments", { status: "deleted" }, `id=eq.${id}`);
+          } else if (act === "ban") {
+            await SB.update("profiles", { status: "rejected" }, `user_id=eq.${uid}`);
+            await SB.update("comments", { status: "deleted" }, `user_id=eq.${uid}&status=eq.active`);
+            const uids = await SB.get("comments", `user_id=eq.${uid}&select=id`);
+            const cids = uids.map((x) => x.id);
+            const idParts = [`user_id=eq.${uid}`];
+            if (cids.length) idParts.push(`comment_id=in.(${cids.join(",")})`);
+            await SB.update("reports", { status: "resolved" }, idParts.join("&") + "&status=eq.pending");
+          }
+          // 重新加载（拉黑会连带删除多条评论）
+          try { await load(); } catch (e) { /* 保留旧数据 */ }
+          render();
+          const s2 = await window.loadTodoStats();
+          window.adminNav("admin-comments.html", s2);
+        } catch (e) {
+          alert("操作失败：" + e.message);
+          row.querySelectorAll("button").forEach((b) => (b.disabled = false));
+        }
       }
 
       document.getElementById("f-article").addEventListener("change", (e) => { curArticle = e.target.value; render(); });

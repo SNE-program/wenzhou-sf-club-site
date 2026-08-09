@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -16,6 +16,7 @@
     })();
   </script>
   <link rel="stylesheet" href="css/style.css?v=23">
+  <link rel="stylesheet" href="css/admin.css?v=1">
 </head>
 <body>
   <div data-nav></div>
@@ -25,7 +26,7 @@
       <h1>投稿审核</h1>
       <div class="sub">审核投稿箱中的新稿件。通过后系统会自动发布到作品库并邮件通知投稿人（最多约 5 分钟）；拒绝时建议填写原因。</div>
     </div>
-    <p><a class="back-link" href="admin.html">← 返回入站审核</a></p>
+    <div id="admin-nav"></div>
 
     <div id="admin-root">
       <div class="state"><div class="spinner"></div>正在加载……</div>
@@ -38,6 +39,7 @@
   <script src="js/api.js?v=6"></script>
   <script src="js/supabase.js?v=8"></script>
   <script src="js/auth.js?v=15"></script>
+  <script src="js/admin.js?v=1"></script>
   <script>
     const FUNC_URL = `${SB.url}/functions/v1/submission-review`;
 
@@ -83,6 +85,9 @@
         return;
       }
 
+      const stats = await window.loadTodoStats();
+      window.adminNav("admin-submissions.html", stats);
+
       let rows = [];
       try {
         rows = await callFn(FUNC_URL);
@@ -93,34 +98,34 @@
 
       function renderList() {
         root.innerHTML = `
-          <div class="audit-count">待审核 <b>${rows.length}</b> 篇</div>
+          <div class="a-count">待审核 <b>${rows.length}</b> 篇</div>
           ${rows.length
             ? rows.map((s) => `
-              <div class="audit-item submit-item" data-id="${esc(s.id)}">
-                <div class="submit-cover" style="${s.cover ? `background-image:url('${esc(s.cover)}')` : "background:linear-gradient(135deg,#1c1030,#3a2a6e)"}">${s.cover ? "" : esc(String(s.title || "?").charAt(0))}</div>
-                <div class="submit-body">
-                  <div class="submit-head">
-                    <b class="submit-title">${esc(s.title || "（无标题）")}</b>
-                    <span class="c-time">${esc(s.author || "匿名")} · ${esc(timeLabel(s.created))}</span>
-                  </div>
-                  <div class="submit-meta">
+              <div class="a-card" data-id="${esc(s.id)}">
+                ${s.cover
+                  ? `<div class="a-cover" style="background-image:url('${esc(s.cover)}')"></div>`
+                  : `<div class="a-cover" style="background:linear-gradient(135deg,#1c1030,#3a2a6e)">${esc(String(s.title || "?").charAt(0))}</div>`}
+                <div class="a-card-main">
+                  <div class="a-card-title">${esc(s.title || "（无标题）")}</div>
+                  <div class="a-card-meta">
+                    <span>${esc(s.author || "匿名")} · ${esc(timeLabel(s.created))}</span>
                     ${(s.types || []).map((t) => `<span class="tag-chip">${esc(t)}</span>`).join("")}
                     ${(s.contests || []).map((t) => `<span class="tag-chip contest">🏆 ${esc(t)}</span>`).join("")}
-                    ${s.email ? `<span class="c-time">✉ ${esc(s.email)}</span>` : ""}
+                    ${s.email ? `<span>✉ ${esc(s.email)}</span>` : ""}
                   </div>
-                  <div class="submit-body-text">${esc(preview(s.body))}</div>
-                  ${s.attachment && s.attachment.url ? `<div class="submit-meta"><a class="c-time" href="${esc(s.attachment.url)}" target="_blank" rel="noopener">📎 附件：${esc(s.attachment.name || "下载")}</a></div>` : ""}
+                  <div class="a-card-text">${esc(preview(s.body))}</div>
+                  ${s.attachment && s.attachment.url ? `<div class="a-card-meta" style="margin-top:0.4rem"><a href="${esc(s.attachment.url)}" target="_blank" rel="noopener">📎 附件：${esc(s.attachment.name || "下载")}</a></div>` : ""}
                 </div>
-                <div class="c-actions">
-                  <button class="btn audit-pass" type="button">通过</button>
-                  <button class="c-btn audit-reject" type="button">拒绝</button>
+                <div class="a-card-actions">
+                  <button class="a-btn" data-act="approve" type="button">通过</button>
+                  <button class="a-btn danger" data-act="reject" type="button">拒绝</button>
                 </div>
               </div>`).join("")
             : `<div class="state">当前没有待审核的投稿。注册用户可通过网站的「投稿」页提交，提交后自动出现在这里。</div>`}`;
-        root.querySelectorAll(".submit-item").forEach((item) => {
+        root.querySelectorAll(".a-card").forEach((item) => {
           const id = item.dataset.id;
-          item.querySelector(".audit-pass").addEventListener("click", () => review(id, "approve"));
-          item.querySelector(".audit-reject").addEventListener("click", () => review(id, "reject"));
+          item.querySelector('[data-act="approve"]').addEventListener("click", () => review(id, "approve"));
+          item.querySelector('[data-act="reject"]').addEventListener("click", () => review(id, "reject"));
         });
       }
 
@@ -129,11 +134,21 @@
         if (!s) return;
         let reason = "";
         if (action === "reject") {
-          reason = (prompt(`拒绝投稿《${s.title || ""}》。\n可填写原因（将随邮件通知投稿人）：`, "") || "").trim();
+          reason = (await window.adminPrompt({
+            title: `拒绝投稿《${s.title || ""}》`,
+            message: "可填写原因（将随邮件通知投稿人）；留空将不附带原因。",
+            placeholder: "例如：主题不符 / 内容不完整 / 需修改后重新投稿",
+            okText: "确认拒绝",
+          })) || "";
         } else {
-          if (!confirm(`确认通过《${s.title || ""}》吗？\n系统将自动发布到作品库并邮件通知投稿人。`)) return;
+          const ok = await window.adminConfirm({
+            title: `确认通过《${s.title || ""}》？`,
+            message: "系统将自动发布到作品库并邮件通知投稿人（约 5 分钟内上架）。",
+            okText: "通过",
+          });
+          if (!ok) return;
         }
-        const btns = document.querySelectorAll(`.submit-item[data-id="${id}"] button`);
+        const btns = document.querySelectorAll(`.a-card[data-id="${id}"] button`);
         btns.forEach((b) => (b.disabled = true));
         try {
           await callFn(FUNC_URL, {
@@ -146,6 +161,9 @@
           } else {
             renderList();
           }
+          // 刷新导航徽标
+          const s2 = await window.loadTodoStats();
+          window.adminNav("admin-submissions.html", s2);
         } catch (e) {
           alert("操作失败：" + e.message);
           btns.forEach((b) => (b.disabled = false));
