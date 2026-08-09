@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -108,7 +108,7 @@
                 </div>
                 <div class="a-card-meta">
                   <span>${esc(w.author || "匿名")}</span>
-                  <span class="tag-chip">${esc(w.category || "未分类")}</span>
+                  <span class="tag-chip">${esc(Array.isArray(w.category) ? w.category.join("、") : (w.category || "未分类"))}</span>
                   <span>${esc(timeLabel(w.created))}</span>
                 </div>
                 <div class="a-card-meta">投稿邮箱：<span class="meta-link">${esc(w.email || "（无投稿记录）")}</span></div>

@@ -130,9 +130,13 @@
     const metaBits = [];
     if (TYPE === "activities") metaBits.push(`📅 ${esc(dateLabel(article.date))}`);
     if (article.location) metaBits.push(`📍 ${esc(article.location)}`);
-    if (article.category) {
+    // 分类已支持多选（数组），链接取首个分类便于回列表页筛选
+    const cats = Array.isArray(article.category) ? article.category : (article.category ? [article.category] : []);
+    if (cats.length) {
       metaBits.push(
-        `<a class="meta-link" href="${backTarget()}?分类=${encodeURIComponent(article.category)}">🏷 ${esc(article.category)}</a>`
+        cats.map((c) =>
+          `<a class="meta-link" href="${backTarget()}?分类=${encodeURIComponent(c)}">🏷 ${esc(c)}</a>`
+        ).join(" ")
       );
     }
     if (article.author) metaBits.push(`✍️ ${esc(article.author)}`);

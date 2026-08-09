@@ -65,6 +65,8 @@ function propText(p, key) {
   if (v.type === "title") return v.title.map((t) => t.plain_text).join("");
   if (v.type === "rich_text") return v.rich_text.map((t) => t.plain_text).join("");
   if (v.type === "select") return v.select ? v.select.name : "";
+  // 多选（如分类）：返回数组，供前端展示
+  if (v.type === "multi_select") return v.multi_select.map((s) => s.name);
   return "";
 }
 

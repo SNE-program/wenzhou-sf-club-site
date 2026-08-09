@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -58,8 +58,13 @@
       function unique(values) {
         return [...new Set(values.filter(Boolean))];
       }
+      // 分类已支持多选（数组）；兼容旧数据为字符串
+      function catArr(it) {
+        const c = it.category;
+        return Array.isArray(c) ? c : (c ? [c] : []);
+      }
       function match(item) {
-        if (curCat && item.category !== curCat) return false;
+        if (curCat && !catArr(item).includes(curCat)) return false;
         return curTags.every((t) => (item.tags || []).includes(t));
       }
       function pushState() {
@@ -70,7 +75,7 @@
       }
 
       function renderChips() {
-        const cats = unique(works.map((w) => w.category));
+        const cats = unique(works.flatMap((w) => catArr(w)));
         const tagCount = {};
         works.forEach((w) => (w.tags || []).forEach((t) => { tagCount[t] = (tagCount[t] || 0) + 1; }));
         // 标签按出现次数降序（标签排序管理）
@@ -78,7 +83,7 @@
 
         const catChips = cats.map((c) => `
           <button class="filter-chip${c === curCat ? " active" : ""}" data-kind="cat" data-v="${esc(c)}">
-            ${esc(c)}<span class="cnt">${works.filter((w) => w.category === c).length}</span>
+            ${esc(c)}<span class="cnt">${works.filter((w) => catArr(w).includes(c)).length}</span>
           </button>`);
         const tagChips = tags.map((t) => `
           <button class="filter-chip${curTags.includes(t) ? " active" : ""}" data-kind="tag" data-v="${esc(t)}">
@@ -118,7 +123,7 @@
                 <h3>${esc(it.title)}</h3>
                 <p>${esc(cardSummary(it))}</p>
                 <div class="card-meta">
-                  <span>${esc(it.category || "未分类")}</span>
+                  <span>${esc(catArr(it).join("、") || "未分类")}</span>
                   ${it.author ? `<span>${esc(it.author)}</span>` : ""}
                   ${it.tags && it.tags.length ? it.tags.map((t) => `<span>#${esc(t)}</span>`).join("") : ""}
                 </div>

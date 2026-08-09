@@ -83,7 +83,7 @@
             <h3>${hl(it.title, kw)}</h3>
             <p>${hl(it.summary, kw)}</p>
             <div class="card-meta">
-              ${it.category ? `<span>${esc(it.category)}</span>` : ""}
+              ${it.category ? `<span>${esc(Array.isArray(it.category) ? it.category.join("、") : it.category)}</span>` : ""}
               ${it.location ? `<span>${esc(it.location)}</span>` : ""}
               ${showDate ? `<span>${esc(dateLabel(it.date))}</span>` : ""}
               ${it.tags && it.tags.length ? it.tags.slice(0, 2).map((t) => `<span>#${esc(t)}</span>`).join("") : ""}

@@ -303,14 +303,16 @@ function chunkText(s, size = 2000) {
 /** 在正式作品库创建作品条目，返回新条目 id */
 async function createWorkPage(sub) {
   const cats = ["短篇小说", "世界观设定", "科普随笔"];
-  const cat = sub.types.find((t) => cats.includes(t)) || "其他";
+  // 分类已支持多选：写入所有命中分类；未命中时兜底"其他"
+  const workCats = sub.types.filter((t) => cats.includes(t));
+  const finalCats = [...new Set(workCats.length ? workCats : ["其他"])];
   const tags = sub.types.filter((t) => !cats.includes(t));
   if (sub.contests.length) tags.push(...sub.contests);
 
   const properties = {
     "标题": { title: [{ text: { content: sub.title } }] },
     "作者": { rich_text: [{ text: { content: sub.author || "匿名" } }] },
-    "分类": { select: { name: cat } },
+    "分类": { multi_select: finalCats.map((n) => ({ name: n })) },
     // 简介 = 短摘要（列表卡片展示）；正文 = 完整内容按 2000 分块（Notion rich_text 单块上限）
     "简介": { rich_text: [{ text: { content: String(sub.body || "").replace(/\s+/g, " ").trim().slice(0, 200) || sub.title } }] },
     "正文": { rich_text: chunkText(sub.body || "") },

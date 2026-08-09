@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -189,7 +189,7 @@
                 <h3>${esc(it.title)}</h3>
                 <p>${esc(it.summary)}</p>
                 <div class="card-meta">
-                  <span>${esc(it.category || "未分类")}</span>
+                  <span>${esc(Array.isArray(it.category) ? it.category.join("、") : (it.category || "未分类"))}</span>
                   ${it.author ? `<span>${esc(it.author)}</span>` : ""}
                 </div>
               </div>

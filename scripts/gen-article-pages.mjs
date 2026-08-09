@@ -209,7 +209,7 @@ ${meta("twitter:card", "summary_large_image")}
   <script src="js/auth.js?v=15"></script>
   <script src="js/vendor/marked.min.js"></script>
   <script src="js/vendor/dompurify.min.js"></script>
-  <script src="js/article.js?v=11"></script>
+  <script src="js/article.js?v=12"></script>
 </body>
 </html>
 `;
