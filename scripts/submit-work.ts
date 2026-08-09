@@ -245,10 +245,16 @@ export default {
     }
     const { data: me } = await supabase
       .from("profiles")
-      .select("nickname, banned, muted")
+      .select("nickname, status, banned, muted")
       .eq("user_id", user.id)
       .maybeSingle();
-    // 服务端校验：被封禁 / 被禁言用户不可投稿（与站规违规处理一致）
+    // 服务端校验：账号未通过审核（rejected）、被封禁、被禁言的用户不可投稿（与站规违规处理一致）
+    if (me && me.status === "rejected") {
+      return Response.json(
+        { error: "\u8d26\u53f7\u672a\u901a\u8fc7\u5ba1\u6838\uff0c\u65e0\u6cd5\u6295\u7a3f" },
+        { status: 403 }
+      );
+    }
     if (me && me.banned) {
       return Response.json(
         { error: "\u8be5\u8d26\u53f7\u5df2\u88ab\u5c01\u7981\uff0c\u65e0\u6cd5\u6295\u7a3f" },

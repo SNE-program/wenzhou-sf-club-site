@@ -103,9 +103,10 @@ BEGIN
   WHERE r.active = true
     AND r.student_hash = crypt(sid, r.student_hash);
 
-  -- 未命中或姓名不符
+  -- 未命中或姓名不符：不直接拒绝，保持待审核（名册可能未导入 / 学号笔误 / 新转学），
+  -- 由管理员人工核实；避免"没操作就被拒"的误伤
   IF row IS NULL OR row.name <> rname THEN
-    PERFORM public.set_profile_status(p_user_id, 'rejected');
+    PERFORM public.set_profile_status(p_user_id, 'pending');
     RETURN 'no_match';
   END IF;
 
@@ -114,8 +115,8 @@ BEGIN
     INSERT INTO public.student_verifications (user_id, student_hash, display_mask, real_name)
     VALUES (p_user_id, row.student_hash, row.display_mask, row.name);
   EXCEPTION WHEN unique_violation THEN
-    -- 该学号已被其他账号绑定 → 拒绝（由管理员线下核实后解绑重绑）
-    PERFORM public.set_profile_status(p_user_id, 'rejected');
+    -- 该学号已被其他账号绑定：保持待审核，由管理员线下核实后解绑重绑
+    PERFORM public.set_profile_status(p_user_id, 'pending');
     RETURN 'claimed';
   END;
 

@@ -125,6 +125,11 @@
       const contests = await loadContests();
 
       const root = document.getElementById("submit-root");
+      // 账号未通过审核（rejected）不可投稿：直接提示、不渲染表单（服务端 Edge Function 同样拦截）
+      if (profile && profile.status === "rejected") {
+        root.innerHTML = `<div class="state"><p>你的账号未通过审核，无法投稿。如有疑问请联系管理员。</p></div>`;
+        return;
+      }
       root.innerHTML = `
         <form class="submit-form" id="submit-form" novalidate>
           <label class="s-field">标题<span class="s-req">*</span>
