@@ -29,11 +29,27 @@
   ];
 
   // 首帧前应用已保存的风格，避免闪烁
+  // 首次访问（无保存偏好）时随机选一套风格与日夜模式并记住，
+  // 之后保持该"随机默认"直到用户手动切换（切换后以手动选择为准）。
   try {
     const savedStyle = localStorage.getItem(STYLE_KEY);
     if (savedStyle && STYLES.some((s) => s.id === savedStyle)) {
       document.documentElement.setAttribute("data-style", savedStyle);
+    } else {
+      const randomStyle = STYLES[Math.floor(Math.random() * STYLES.length)].id;
+      localStorage.setItem(STYLE_KEY, randomStyle);
+      document.documentElement.setAttribute("data-style", randomStyle);
     }
+
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    if (savedTheme) {
+      document.documentElement.setAttribute("data-theme", savedTheme);
+    } else {
+      const randomTheme = Math.random() < 0.5 ? "dark" : "light";
+      localStorage.setItem(THEME_KEY, randomTheme);
+      document.documentElement.setAttribute("data-theme", randomTheme);
+    }
+
     // 首帧前应用极简模式（无图片 / 纯文字排版）
     if (localStorage.getItem(MINIMAL_KEY) === "1") {
       document.documentElement.classList.add("minimal");

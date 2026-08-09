@@ -203,7 +203,7 @@ ${meta("twitter:card", "summary_large_image")}
   <div data-footer></div>
 
   <script>window.ARTICLE_CTX = { id: ${JSON.stringify(id)}, type: ${JSON.stringify(type)} };</script>
-  <script src="js/common.js?v=8"></script>
+  <script src="js/common.js?v=9"></script>
   <script src="js/api.js?v=6"></script>
   <script src="js/supabase.js?v=8"></script>
   <script src="js/auth.js?v=15"></script>
