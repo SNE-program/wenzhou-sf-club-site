@@ -24,7 +24,7 @@
 
   /** 当前登录用户是否为管理员（失败/未登录返回 false） */
   async function isAdmin() {
-    const user = window.SB && window.SB.user();
+    const user = SB && SB.user();
     if (!user) return false;
     try {
       const me = await window.getMyProfile();
@@ -40,7 +40,7 @@
    */
   async function loadTodoStats() {
     const stats = { submissions: 0, reports: 0, users: 0 };
-    if (!window.SB || !(await isAdmin())) return stats;
+    if (!SB || !(await isAdmin())) return stats;
     try {
       // 复用 SB.request：自动带 apikey/Authorization，且 401 时自动续期重试一次
       const d = await SB.request("/functions/v1/submission-review");
