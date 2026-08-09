@@ -61,6 +61,11 @@
   gap: 0.8rem;
   margin-bottom: 1.2rem;
 }
+/* 窄屏：待办统计卡改为单列堆叠，避免三卡被压扁、文字竖排 */
+@media (max-width: 720px) {
+  .a-dash { grid-template-columns: 1fr; }
+  .a-dash-card { padding: 0.95rem 1.05rem; }
+}
 .a-dash-card {
   display: flex;
   align-items: center;
@@ -259,3 +264,16 @@
 /* ---------- 统计条 / 空态 ---------- */
 .a-count { color: var(--text-dim); margin-bottom: 0.9rem; }
 .a-count b { color: var(--accent); }
+
+/* ---------- 评论筛选工具栏 ---------- */
+.ac-filter {
+  grid-template-columns: auto auto 1fr;
+  margin: 0;
+  flex: 1;
+}
+.ac-filter .c-field { margin: 0; }
+/* 窄屏：文章/状态两列并排，昵称关键词占满整行 */
+@media (max-width: 720px) {
+  .ac-filter { grid-template-columns: 1fr 1fr; }
+  .ac-filter .c-field:nth-child(3) { grid-column: span 2; }
+}

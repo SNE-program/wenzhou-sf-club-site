@@ -16,7 +16,7 @@
     })();
   </script>
   <link rel="stylesheet" href="css/style.css?v=23">
-  <link rel="stylesheet" href="css/admin.css?v=1">
+  <link rel="stylesheet" href="css/admin.css?v=2">
 </head>
 <body>
   <div data-nav></div>
@@ -29,18 +29,18 @@
     <div id="admin-nav"></div>
 
     <div class="c-toolbar" id="toolbar" hidden>
-      <div class="c-grid" style="grid-template-columns:auto auto 1fr;margin:0;flex:1">
-        <label class="c-field" style="margin:0">文章
+      <div class="c-grid ac-filter">
+        <label class="c-field">文章
           <select id="f-article"><option value="">全部</option></select>
         </label>
-        <label class="c-field" style="margin:0">状态
+        <label class="c-field">状态
           <select id="f-status">
             <option value="">全部</option>
             <option value="active">正常</option>
             <option value="deleted">已删除</option>
           </select>
         </label>
-        <label class="c-field" style="margin:0">昵称关键词
+        <label class="c-field">昵称关键词
           <input id="f-nick" type="search" placeholder="输入昵称筛选…" autocomplete="off">
         </label>
       </div>
