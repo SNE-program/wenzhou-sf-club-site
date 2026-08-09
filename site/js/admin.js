@@ -42,14 +42,10 @@
     const stats = { submissions: 0, reports: 0, users: 0 };
     if (!window.SB || !(await isAdmin())) return stats;
     try {
-      const res = await fetch(`${SB.url}/functions/v1/submission-review`, {
-        headers: { apikey: SB.anon, Authorization: "Bearer " + SB.token() },
-      });
-      if (res.ok) {
-        const d = await res.json();
-        stats.submissions = Array.isArray(d) ? d.length : 0;
-      }
-    } catch (e) { /* 忽略 */ }
+      // 复用 SB.request：自动带 apikey/Authorization，且 401 时自动续期重试一次
+      const d = await SB.request("/functions/v1/submission-review");
+      stats.submissions = Array.isArray(d) ? d.length : 0;
+    } catch (e) { /* 忽略：静默降级为 0，不阻塞页面 */ }
     try {
       const rs = await SB.get("reports", "status=eq.pending&select=id&limit=500");
       stats.reports = Array.isArray(rs) ? rs.length : 0;
@@ -138,6 +134,24 @@
   window.adminConfirm = (opts) => openModal({ ...opts, input: false });
   /** 输入弹层：adminPrompt({title, message, placeholder, required, okText}) → Promise<string|null> */
   window.adminPrompt = (opts) => openModal({ ...opts, input: true });
+  /** 只读全文弹层：adminView({title, body}) — 保留换行、可滚动，用于审核全文预览 */
+  window.adminView = (opts) => {
+    closeModal(null);
+    const mask = document.createElement("div");
+    mask.className = "a-modal-mask";
+    mask.id = "a-modal";
+    mask.innerHTML = `
+      <div class="a-modal wide" role="dialog" aria-modal="true" aria-label="${esc(opts.title || "")}">
+        <div class="a-modal-title">${esc(opts.title || "")}</div>
+        <div class="a-modal-body">${esc(opts.body || "（无内容）")}</div>
+        <div class="a-modal-actions">
+          <button type="button" class="a-btn" data-act="close">关闭</button>
+        </div>
+      </div>`;
+    document.body.appendChild(mask);
+    mask.addEventListener("click", (e) => { if (e.target === mask) closeModal(null); });
+    mask.querySelector('[data-act="close"]').addEventListener("click", () => closeModal(null));
+  };
 
   window.isAdmin = isAdmin;
   window.loadTodoStats = loadTodoStats;
