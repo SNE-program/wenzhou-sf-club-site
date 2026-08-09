@@ -6,6 +6,7 @@
 //   GET /api/works       作品列表
 //   GET /api/contests    竞赛列表
 //   GET /api/members     成员列表
+//   GET /api/worlds      世界观列表（根 + 时代线 + 枝干中心页，聚合作品数）
 //   定时任务（每 5 分钟，投稿闭环兜底 + 内容同步触发）：
 //     已通过→自动转录发布+上架邮件；已拒绝→发送拒绝邮件
 //     对比 Notion 与仓库 main 数据指纹，有变化则 repository_dispatch
@@ -15,6 +16,7 @@
 // 绑定（部署时注入，作为全局变量）：
 //   NOTION_TOKEN   Notion 内部连接令牌（ntn_ 开头）
 //   DB_SITE / DB_ACTIVITIES / DB_WORKS / DB_CONTESTS / DB_MEMBERS / DB_SUBMISSIONS
+//   DB_WORLDS（世界观表=根）/ DB_HUBS（中心页表=枝干）
 //   SITE_BASE      站内链接前缀（默认 github.io 地址）
 //   RESEND_API_KEY（secret）/ RESEND_FROM  投稿结果邮件
 //   GH_REPO（var）/ GH_TOKEN（secret） 内容同步触发 GitHub 工作流
@@ -98,6 +100,7 @@ function mapWork(row) {
     body: propText(p["正文"]),
     cover: propCover(p["封面"]),
     status: propText(p["发布状态"]),
+    hub: propText(p["所属中心页"]),
   };
 }
 
@@ -122,6 +125,135 @@ function mapMember(row) {
     role: propText(p["角色"]),
     bio: propText(p["简介"]),
   };
+}
+
+function propBool(p) {
+  if (!p || p.type !== "checkbox") return false;
+  return !!p.checkbox;
+}
+
+// ---------- 世界观（根）/ 中心页（枝干） 双表 ----------
+/** 杂文保留名：挂到这些中心页名下的作品一律按杂文处理 */
+const RESERVED_OUTSIDE = new Set(["宇宙与时间之外", "世界与时间之外"]);
+
+/** 时代线解析：每行 `时代名 | 时间段 | 简介`，按首个 `|` 分割，至多 3 段（与 gen-site-data 同一规则） */
+function parseEras(text) {
+  return String(text || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split("|").map((s) => s.trim());
+      return { name: parts[0] || "", range: parts[1] || "", desc: parts.slice(2).join("|").trim() };
+    })
+    .filter((e) => e.name);
+}
+
+function mapWorld(row) {
+  const p = row.properties || {};
+  return {
+    id: row.id,
+    name: propText(p["名称"]),
+    summary: propText(p["简介"]),
+    body: propText(p["设定正文"]),
+    eras: parseEras(propText(p["时代线"])),
+    cover: propCover(p["封面"]),
+    shown: propBool(p["是否展示"]),
+  };
+}
+
+function mapHub(row) {
+  const p = row.properties || {};
+  return {
+    id: row.id,
+    name: propText(p["名称"]),
+    world: propText(p["所属世界观"]),
+    era: propText(p["所属时代"]),
+    theme: propText(p["主题"]),
+    summary: propText(p["简介"]),
+    body: propText(p["设定正文"]),
+    sort: p["排序"] && p["排序"].type === "number" ? p["排序"].number || 0 : 0,
+    cover: propCover(p["封面"]),
+    shown: propBool(p["是否展示"]),
+  };
+}
+
+async function loadWorlds() {
+  const data = await queryDatabase(DB_WORLDS, { page_size: 100 });
+  return data.results.map(mapWorld).filter((x) => x.name && x.shown);
+}
+
+async function loadHubs() {
+  const data = await queryDatabase(DB_HUBS, { page_size: 100 });
+  // 保留名行（宇宙与时间之外 / 世界与时间之外）不视为枝干中心页，直接剔除
+  return data.results
+    .map(mapHub)
+    .filter((x) => x.name && x.shown && !RESERVED_OUTSIDE.has(x.name));
+}
+
+/** 据「所属中心页」推导 hubId/world/worldId/era：
+ *  中心页为空 / 为保留名 / 已停用或不存在 → 一律按杂文处理（hub 及衍生字段全部置空） */
+async function annotateWorks(works) {
+  const [worlds, hubs] = await Promise.all([loadWorlds(), loadHubs()]);
+  const worldByName = new Map(worlds.map((w) => [w.name, w]));
+  const hubByName = new Map(hubs.map((h) => [h.name, h]));
+  for (const w of works) {
+    const name = String(w.hub || "").trim();
+    const hub = name && !RESERVED_OUTSIDE.has(name) ? hubByName.get(name) : null;
+    if (!hub) {
+      w.hub = "";
+      w.hubId = "";
+      w.world = "";
+      w.worldId = "";
+      w.era = "";
+      continue;
+    }
+    const world = worldByName.get(hub.world);
+    w.hubId = hub.id;
+    w.world = hub.world;
+    w.worldId = world ? world.id : "";
+    w.era = hub.era;
+  }
+}
+
+/** 聚合 worlds 数据（与 gen-site-data.mjs loadWorldsData 一致）：根 + 时代线 + 枝干（作品数） */
+async function loadWorldsSection() {
+  const [worlds, hubs, works] = await Promise.all([loadWorlds(), loadHubs(), loadWorksSection()]);
+  const countByHub = new Map();
+  const countByWorld = new Map();
+  for (const wk of works) {
+    if (wk.hubId) countByHub.set(wk.hubId, (countByHub.get(wk.hubId) || 0) + 1);
+    if (wk.worldId) countByWorld.set(wk.worldId, (countByWorld.get(wk.worldId) || 0) + 1);
+  }
+  return worlds.map((w) => {
+    const eraOrder = new Map(w.eras.map((e, i) => [e.name, i]));
+    const hubList = hubs
+      .filter((h) => h.world === w.name)
+      .map((h) => ({
+        id: h.id,
+        name: h.name,
+        theme: h.theme,
+        era: eraOrder.has(h.era) ? h.era : "", // 不匹配根时代名 → 根级未归档兜底
+        sort: h.sort,
+        workCount: countByHub.get(h.id) || 0,
+      }))
+      .sort((a, b) => {
+        const ai = a.era ? eraOrder.get(a.era) : -1;
+        const bi = b.era ? eraOrder.get(b.era) : -1;
+        return (ai < 0 ? 1e9 : ai) - (bi < 0 ? 1e9 : bi) || a.sort - b.sort || a.name.localeCompare(b.name, "zh");
+      });
+    return {
+      id: w.id,
+      name: w.name,
+      summary: w.summary,
+      body: w.body,
+      eras: w.eras,
+      cover: w.cover,
+      hubs: hubList,
+      hubCount: hubList.length,
+      workCount: countByWorld.get(w.id) || 0,
+    };
+  });
 }
 
 // ---------- 查询 Notion ----------
@@ -160,8 +292,17 @@ async function loadSection(route) {
     }
     case "works": {
       const data = await queryDatabase(DB_WORKS, { page_size: 100 });
-      return data.results.map(mapWork).filter((x) => x.title && x.status !== "已下架");
+      const works = data.results.map(mapWork).filter((x) => x.title && x.status !== "已下架");
+      // 世界观标注（hub/hubId/world/worldId/era）；双表不可用时容错为杂文
+      try {
+        await annotateWorks(works);
+      } catch (e) {
+        console.warn("[api] works 世界观标注失败（按杂文处理）", e.message);
+      }
+      return works;
     }
+    case "worlds":
+      return loadWorldsSection();
     case "contests": {
       const data = await queryDatabase(DB_CONTESTS, {
         page_size: 100,
@@ -192,7 +333,7 @@ async function handleRequest(request, event) {
     return new Response("Method Not Allowed", { status: 405, headers: corsHeaders() });
   }
 
-  if (!["site", "activities", "works", "contests", "members"].includes(route)) {
+  if (!["site", "activities", "works", "contests", "members", "worlds"].includes(route)) {
     return new Response("Not Found", { status: 404, headers: corsHeaders() });
   }
 
@@ -511,6 +652,7 @@ const SYNC_FILES = {
   works: "works.json",
   contests: "contests.json",
   members: "members.json",
+  worlds: "worlds.json",
 };
 
 /** 封面稳定标识：Notion 临时文件取 S3 路径（签名参数会轮换，忽略）；外链原样保留 */

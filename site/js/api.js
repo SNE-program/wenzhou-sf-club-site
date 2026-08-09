@@ -12,6 +12,7 @@ const DATA_FILES = {
   works: "data/works.json",
   contests: "data/contests.json",
   members: "data/members.json",
+  worlds: "data/worlds.json",
 };
 
 // 3 秒超时兜底：即使 API 不可达，也绝不阻塞页面渲染
