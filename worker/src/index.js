@@ -143,17 +143,25 @@ function propBool(p) {
 /** 杂文保留名：挂到这些中心页名下的作品一律按杂文处理 */
 const RESERVED_OUTSIDE = new Set(["宇宙与时间之外", "世界与时间之外"]);
 
-/** 时代线解析：每行 `时代名 | 时间段 | 简介`，按首个 `|` 分割，至多 3 段（与 gen-site-data 同一规则） */
+/** 时代线解析（三处保持一致：gen-site-data / Worker / admin-worlds）：
+ *  每条时代以「名称 | 时间段 | 简介首段」起头，其后可跟续段与引言行；
+ *  以 “ 开头的行 → quote（引言），其余续行 → 追加到 desc 段落 */
 function parseEras(text) {
-  return String(text || "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line.split("|").map((s) => s.trim());
-      return { name: parts[0] || "", range: parts[1] || "", desc: parts.slice(2).join("|").trim() };
-    })
-    .filter((e) => e.name);
+  const eras = [];
+  let cur = null;
+  for (const line of String(text || "").split("\n").map((l) => l.trim()).filter(Boolean)) {
+    const parts = line.split("|");
+    const isHead = parts.length >= 3 && parts[0].trim() && parts[1].trim();
+    if (isHead) {
+      if (cur) eras.push(cur);
+      cur = { name: parts[0].trim(), range: parts[1].trim(), desc: parts.slice(2).join("|").trim(), quote: "" };
+    } else if (cur) {
+      if (line.startsWith("“")) cur.quote = (cur.quote ? cur.quote + "\n" : "") + line;
+      else cur.desc = (cur.desc ? cur.desc + "\n" : "") + line;
+    }
+  }
+  if (cur) eras.push(cur);
+  return eras.filter((e) => e.name);
 }
 
 function mapWorld(row) {
