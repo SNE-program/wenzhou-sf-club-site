@@ -168,7 +168,9 @@ export default {
       }
       try {
         if (action === "delete") {
-          const res = await fetch(`https://api.notion.com/v1/pages/${id}`, {
+          // 注意：DELETE /v1/pages/{id} 在当前 API 版本返回 400 invalid_request_url；
+          // 改用 DELETE /v1/blocks/{id}（页面行即 block），移入回收站，前台 query 自动隐藏
+          const res = await fetch(`https://api.notion.com/v1/blocks/${id}`, {
             method: "DELETE",
             headers: notionHeaders(),
           });
