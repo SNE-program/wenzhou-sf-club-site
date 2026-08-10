@@ -15,7 +15,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="css/style.css?v=23">
+  <link rel="stylesheet" href="css/style.css?v=24">
   <link rel="stylesheet" href="css/admin.css?v=3">
   <style>
     .w-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.1rem; }
@@ -197,7 +197,7 @@
                   <span class="c-fname" id="cover-name">${v("cover") ? "已填封面链接" : "未选择文件"}</span>
                 </div>
               </label>
-              <label class="c-field" style="display:flex;gap:0.5rem;align-items:center;margin-bottom:1rem">
+              <label class="c-check">
                 <input type="checkbox" name="shown" ${v("shown") !== false ? "checked" : ""}> 展示此世界观（关闭后网站隐藏其时代之树）
               </label>
               <div class="c-actions">
@@ -271,7 +271,7 @@
                   <span class="c-fname" id="hub-cover-name">${v("cover") ? "已填封面链接" : "未选择文件"}</span>
                 </div>
               </label>
-              <label class="c-field" style="display:flex;gap:0.5rem;align-items:center;margin-bottom:1rem">
+              <label class="c-check">
                 <input type="checkbox" name="shown" ${v("shown") !== false ? "checked" : ""}> 展示此中心页（关闭后该枝干不出现）
               </label>
               <div class="c-actions">

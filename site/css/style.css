@@ -1628,6 +1628,33 @@ mark {
 }
 .c-field input:focus, .c-field select:focus, .c-field textarea:focus { outline: none; border-color: var(--accent); }
 .c-actions { display: flex; gap: 0.6rem; margin-top: 0.4rem; }
+/* 「展示」开关行：不沿用上方通配的 display:block/width:100%，复选框与文字紧凑同行并美化 */
+.c-check {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px dashed var(--border);
+  border-radius: calc(var(--radius) * 0.6);
+  background: var(--surface);
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+.c-check:hover { border-color: var(--accent); color: var(--text); background: var(--surface-hover); }
+.c-check input[type="checkbox"] {
+  display: inline-block;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  padding: 0;
+  flex: none;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
 @media (max-width: 720px) {
   .c-grid { grid-template-columns: 1fr; }
   .c-grid .span2 { grid-column: span 1; }
