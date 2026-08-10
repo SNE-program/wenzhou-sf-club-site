@@ -75,6 +75,18 @@
     // 登录/登出后整页重建（表单依赖登录态，避免停留在未登录占位页）
     window.addEventListener("sb-auth-changed", () => location.reload());
 
+    // uuid v4：worlds / hubs 的 id 列为 uuid 主键且无数据库默认值，
+    // 新建（insert）时由前端生成（现代浏览器 crypto.randomUUID；老环境兜底随机）
+    function genUuid() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+      }
+      return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+      });
+    }
+
     // 时代线解析（与 gen-site-data / Worker 同一规则）：
     // 每条时代以「名称 | 时间段 | 简介首段」起头，其后可跟续段与引言行；
     // 以 “ 开头的行 → quote（引言），其余续行 → 追加到 desc 段落
@@ -468,7 +480,8 @@
             if (id) {
               await SB.update(currentTab, body, `id=eq.${id}`);
             } else {
-              await SB.insert(currentTab, body);
+              // worlds/hubs 的 id 列为 uuid 主键且无默认值，新建时前端生成
+              await SB.insert(currentTab, { id: genUuid(), ...body });
             }
             await loadAll();
             render();
