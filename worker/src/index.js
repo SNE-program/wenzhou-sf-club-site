@@ -566,6 +566,8 @@ async function createWorkPage(sub) {
     // 简介 = 短摘要（列表卡片展示）；正文 = 完整内容按 2000 分块（Notion rich_text 单块上限）
     "简介": { rich_text: [{ text: { content: String(sub.body || "").replace(/\s+/g, " ").trim().slice(0, 200) || sub.title } }] },
     "正文": { rich_text: chunkText(sub.body || "") },
+    // 审核通过转录即发布：发布状态置为「已上架」（公开数据读取端仅排除「已下架」）
+    "发布状态": { select: { name: "已上架" } },
   };
   if (tags.length) properties["标签"] = { multi_select: [...new Set(tags)].map((n) => ({ name: n })) };
   // 封面仅转录外部链接（避免 Notion 临时文件链接过期裂图）
@@ -627,6 +629,20 @@ async function createWorkPage(sub) {
     // 作品库缺「所属中心页」列时：去掉该字段重试（容错为杂文，不阻塞发布）
     if (res.status === 400 && properties["所属中心页"]) {
       delete properties["所属中心页"];
+      const retry = await fetch("https://api.notion.com/v1/pages", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${NOTION_TOKEN}`,
+          "Notion-Version": NOTION_VERSION,
+          "Content-Type": "application/json",
+        },
+        body: mkBody(),
+      });
+      if (retry.ok) return (await retry.json()).id;
+    }
+    // 作品库缺「发布状态」列时：去掉该字段重试（不阻塞发布）
+    if (res.status === 400 && properties["发布状态"]) {
+      delete properties["发布状态"];
       const retry = await fetch("https://api.notion.com/v1/pages", {
         method: "POST",
         headers: {
