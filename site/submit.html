@@ -239,9 +239,10 @@
             }
             hubSelect.appendChild(og);
           }
-          hubField.hidden = false;
         }
-      } catch (e) { /* 世界观数据不可用时隐藏该字段（降级为杂文），不阻塞投稿 */ }
+      } catch (e) { /* 世界观数据不可用时仅保留默认杂文选项，不阻塞投稿 */ }
+      // 无论是否存在枝干中心页，都展示该字段：默认「宇宙与时间之外（杂文）」始终可选
+      hubField.hidden = false;
 
       const form = document.getElementById("submit-form");
       const errEl = document.getElementById("s-err");
