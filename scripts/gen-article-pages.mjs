@@ -207,7 +207,7 @@ ${meta("twitter:card", "summary_large_image")}
 
   <script>window.ARTICLE_CTX = { id: ${JSON.stringify(id)}, type: ${JSON.stringify(type)} };</script>
   <script src="js/common.js?v=10"></script>
-  <script src="js/api.js?v=6"></script>
+  <script src="js/api.js?v=7"></script>
   <script src="js/supabase.js?v=9"></script>
   <script src="js/auth.js?v=16"></script>
   <script src="js/vendor/marked.min.js"></script>
@@ -468,7 +468,7 @@ ${meta("twitter:card", "summary_large_image")}
 
   <script>window.WORLD_TREE = ${treeJson};</script>
   <script src="js/common.js?v=10"></script>
-  <script src="js/api.js?v=6"></script>
+  <script src="js/api.js?v=7"></script>
   <script src="js/supabase.js?v=9"></script>
   <script src="js/auth.js?v=16"></script>
   <script src="js/world-tree.js?v=8"></script>
@@ -542,7 +542,7 @@ ${meta("twitter:card", "summary_large_image")}
 
   <script>window.HUB_CTX = { worldId: ${JSON.stringify(world.id)}, hubId: ${JSON.stringify(hub.id)} };</script>
   <script src="js/common.js?v=10"></script>
-  <script src="js/api.js?v=6"></script>
+  <script src="js/api.js?v=7"></script>
   <script src="js/supabase.js?v=9"></script>
   <script src="js/auth.js?v=16"></script>
   <script src="js/vendor/marked.min.js"></script>
@@ -616,7 +616,7 @@ ${meta("twitter:card", "summary_large_image")}
 
   <script>window.META_CTX = { worldId: ${JSON.stringify(world.id)} };</script>
   <script src="js/common.js?v=10"></script>
-  <script src="js/api.js?v=6"></script>
+  <script src="js/api.js?v=7"></script>
   <script src="js/supabase.js?v=9"></script>
   <script src="js/auth.js?v=16"></script>
   <script src="js/vendor/marked.min.js"></script>

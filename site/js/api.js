@@ -6,6 +6,13 @@
 // Worker 部署后，把下面地址换成你的 Worker 域名（如 https://xxx.workers.dev）
 const API_BASE = (window.SITE_API || "").replace(/\/+$/, "");
 
+// 子目录页面（如 /worlds/xxx.html、/articles/xxx.html）中相对路径
+// “data/xxx.json” 会解析成 /worlds/data/… 而 404，这里按当前页面深度回溯到站点根
+const _dirPrefix = (() => {
+  const segs = location.pathname.split("/").filter(Boolean);
+  return segs.length > 1 ? "../".repeat(segs.length - 1) : "";
+})();
+
 const DATA_FILES = {
   site: "data/site.json",
   activities: "data/activities.json",
@@ -14,6 +21,12 @@ const DATA_FILES = {
   members: "data/members.json",
   worlds: "data/worlds.json",
 };
+
+/** 某类数据的最终 URL：优先 Worker API，否则本地 JSON（自动处理子目录回溯） */
+function dataUrl(name) {
+  if (API_BASE) return `${API_BASE}/api/${name}`;
+  return _dirPrefix + DATA_FILES[name];
+}
 
 // 3 秒超时兜底：即使 API 不可达，也绝不阻塞页面渲染
 async function getJSON(url) {
@@ -37,7 +50,7 @@ async function fetchSection(name) {
       console.warn(`[站点] Worker 不可用，降级到本地数据：${name}`, e);
     }
   }
-  return getJSON(DATA_FILES[name]);
+  return getJSON(dataUrl(name));
 }
 
 /** 由封面 / 标题生成渐变背景（无真实图片时使用），返回内联样式 CSS 字符串 */
