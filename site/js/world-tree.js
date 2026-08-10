@@ -64,6 +64,8 @@
 
   const cursor = document.createElement("div");
   cursor.className = "tree-cursor";
+  // 位置由 JS 逐帧驱动（严格沿曲线飞行），禁用 CSS 过渡避免滞后拖尾
+  cursor.style.transition = "none";
   scene.appendChild(cursor);
 
   if (svgEl) {
@@ -200,16 +202,46 @@
     });
   }
 
+  // ---------- 聚焦光圈沿曲线飞行 ----------
+  // 相机 + 光圈同步：切换时代时，光圈严格沿时间轴曲线滑动到目标时代点，
+  // 并始终保持在舞台中心（scene 跟随平移）。曲线由 pos(t) 参数方程定义。
+  let cursorT = 0;      // 光圈当前在曲线上的参数 t ∈ [0,1]
+  let flyRaf = null;    // 飞行帧循环句柄
+  const FLY_MS = 2400;  // 飞行时长：沿曲线缓速抵达（原 1100ms 偏快）
+  const easeInOutCubic = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+
+  function applyView(t) {
+    const p = pos(t);
+    cursor.style.left = p.x + "px";
+    cursor.style.top = p.y + "px";
+    scene.style.transform = `translate(${stage.clientWidth / 2 - p.x}px, ${stage.clientHeight / 2 - p.y}px)`;
+  }
+
+  /** 沿曲线从当前位置飞行到参数 t1（曲线首尾 t=0/1） */
+  function flyTo(t1) {
+    const t0 = cursorT;
+    if (flyRaf) cancelAnimationFrame(flyRaf);
+    if (Math.abs(t1 - t0) < 1e-4) { applyView(t1); cursorT = t1; return; }
+    const start = performance.now();
+    const tick = (now) => {
+      const u = Math.min(1, (now - start) / FLY_MS);
+      const t = t0 + (t1 - t0) * easeInOutCubic(u);
+      cursorT = t;
+      applyView(t);
+      if (u < 1) flyRaf = requestAnimationFrame(tick);
+      else flyRaf = null;
+    };
+    flyRaf = requestAnimationFrame(tick);
+  }
+
   function go(next) {
     if (next < 0 || next >= PTS.length) return;
     cur = next;
     const t0 = eraTheme(cur);
     stage.style.background = t0.bg;
     stage.style.borderColor = t0.dim;
-    const p = PTS[cur];
-    const tx = stage.clientWidth / 2 - p.x;
-    const ty = stage.clientHeight / 2 - p.y;
-    scene.style.transform = `translate(${tx}px, ${ty}px)`;
+    // 相机 + 聚焦光圈：沿曲线平滑飞行到目标时代（applyView 在 flyTo 中逐帧驱动）
+    flyTo(PTS.length > 1 ? cur / (PTS.length - 1) : 0);
 
     eraEls.forEach((e, i) => {
       e.dot.classList.toggle("active", i === cur);
@@ -226,8 +258,7 @@
         e.tag.style.boxShadow = "none";
       }
     });
-    cursor.style.left = p.x + "px";
-    cursor.style.top = p.y + "px";
+    // 注意：光标的 left/top 与 scene 平移由 flyTo 逐帧驱动（严格沿曲线），此处不再直接定位
 
     hubEls.forEach(({ el, h, era, idx, count }) => {
       if (era === cur) showHub(el, h, era, idx, count);

@@ -324,8 +324,7 @@ ${meta("twitter:card", "summary_large_image")}
       box-shadow: 0 0 24px 7px rgba(124, 196, 255, .85); }
     .tree-cursor { position: absolute; width: 34px; height: 34px; border-radius: 50%;
       border: 2px solid rgba(255, 255, 255, .92); transform: translate(-50%, -50%);
-      pointer-events: none; z-index: 2;
-      transition: left 1.1s cubic-bezier(.25, .85, .3, 1), top 1.1s cubic-bezier(.25, .85, .3, 1);
+      pointer-events: none; z-index: 2; /* 位置由 world-tree.js 沿曲线逐帧驱动，无需 CSS 过渡 */
       box-shadow: 0 0 0 2px rgba(38, 46, 66, .45), 0 0 22px 8px rgba(120, 170, 255, .35); }
     .tree-cursor::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px;
       border-radius: 50%; background: #eaf4ff; transform: translate(-50%, -50%); }
@@ -471,7 +470,7 @@ ${meta("twitter:card", "summary_large_image")}
   <script src="js/api.js?v=7"></script>
   <script src="js/supabase.js?v=9"></script>
   <script src="js/auth.js?v=16"></script>
-  <script src="js/world-tree.js?v=8"></script>
+  <script src="js/world-tree.js?v=10"></script>
 </body>
 </html>
 `;
