@@ -19,6 +19,7 @@
     { href: "admin-users.html", label: "入站/人员", icon: "☻", todo: "users" },
     { href: "admin-comments.html", label: "评论管理", icon: "☷" },
     { href: "admin-works.html", label: "作品管理", icon: "▤" },
+    { href: "admin-worlds.html", label: "世界观", icon: "◈" },
     { href: "admin-contests.html", label: "竞赛管理", icon: "✦" },
   ];
 

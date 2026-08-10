@@ -6,10 +6,11 @@
 //   GET  {SUPABASE_URL}/functions/v1/works-admin
 //        → 全部作品列表（含发布状态），仅管理员
 //   POST {SUPABASE_URL}/functions/v1/works-admin
-//        body: { action: "down" | "up" | "delete", id: "<作品页ID>" }
+//        body: { action: "down" | "up" | "delete" | "set_hub", id: "<作品页ID>", hub?: "<中心页名>" }
 //        → down: 下架（发布状态=已下架，前台隐藏；可恢复）
 //           up:   上架（发布状态=已上架）
 //           delete: 永久删除（Notion archive，不可恢复）
+//           set_hub: 调整作品归属（所属中心页=hub；hub 传空串则归为杂文）
 //   headers: Authorization: Bearer <管理员登录JWT>，apikey: <anon>
 //
 // 下架/上架改的是 Notion 作品库「发布状态」列；Worker 定时对比数据指纹后
@@ -39,6 +40,7 @@ const S = {
   summary: "\u7b80\u4ecb", // 简介
   email: "\u90ae\u7bb1", // 邮箱
   workId: "\u4f5c\u54c1ID", // 作品ID
+  hub: "\u6240\u5c5e\u4e2d\u5fc3\u9875", // 所属中心页
   notLogin: "\u672a\u767b\u5f55", // 未登录
   noAdmin: "\u65e0\u7ba1\u7406\u5458\u6743\u9650", // 无管理员权限
   missingArgs: "\u7f3a\u5c11\u53c2\u6570 action/id", // 缺少参数 action/id
@@ -80,6 +82,7 @@ function mapRow(row) {
     category: propText(p, S.category),
     summary: propText(p, S.summary),
     status: propText(p, S.status) || S.up,
+    hub: propText(p, S.hub),
     created: row.created_time || "",
   };
 }
@@ -156,8 +159,11 @@ export default {
       } catch {
         return Response.json({ error: "bad json" }, { status: 400 });
       }
-      const { action, id } = body || {};
-      if (!["down", "up", "delete"].includes(action) || !id) {
+      const { action, id, hub } = body || {};
+      if (!["down", "up", "delete", "set_hub"].includes(action) || !id) {
+        return Response.json({ error: S.missingArgs }, { status: 400 });
+      }
+      if (action === "set_hub" && typeof hub !== "string") {
         return Response.json({ error: S.missingArgs }, { status: 400 });
       }
       try {
@@ -168,12 +174,15 @@ export default {
           });
           if (!res.ok && res.status !== 404) await throwWithDetail("delete failed", res);
         } else {
+          // set_hub：调整作品归属（所属中心页 select；hub 为空串则清除 → 归为杂文）
+          const properties =
+            action === "set_hub"
+              ? { [S.hub]: hub ? { select: { name: hub } } : { select: null } }
+              : { [S.status]: { select: { name: action === "down" ? S.down : S.up } } };
           const res = await fetch(`https://api.notion.com/v1/pages/${id}`, {
             method: "PATCH",
             headers: notionHeaders(),
-            body: JSON.stringify({
-              properties: { [S.status]: { select: { name: action === "down" ? S.down : S.up } } },
-            }),
+            body: JSON.stringify({ properties }),
           });
           if (!res.ok) await throwWithDetail("update failed", res);
         }

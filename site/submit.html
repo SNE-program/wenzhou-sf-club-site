@@ -28,15 +28,19 @@
     .s-field > input[type="text"],
     .s-field > input[type="url"],
     .s-field > textarea,
-    .s-field > input[type="file"] {
+    .s-field > input[type="file"],
+    .s-field > select {
       width: 100%; box-sizing: border-box;
       padding: 0.65rem 0.8rem; border-radius: 11px; font-size: 0.95rem;
       background: var(--surface); border: 1px solid var(--border); color: var(--text);
       font-family: inherit;
     }
+    .s-field > select { cursor: pointer; }
+    .s-field > select option,
+    .s-field > select optgroup { background: var(--bg-soft); color: var(--text); }
     .s-field > input[type="file"] { cursor: pointer; padding: 0.5rem 0.8rem; }
     .s-field > textarea { resize: vertical; min-height: 12rem; line-height: 1.7; }
-    .s-field > input:focus, .s-field > textarea:focus {
+    .s-field > input:focus, .s-field > textarea:focus, .s-field > select:focus {
       outline: none; border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(232, 177, 76, 0.12);
     }
@@ -79,9 +83,9 @@
 
   <div data-footer></div>
 
-  <script src="js/common.js?v=9"></script>
+  <script src="js/common.js?v=10"></script>
   <script src="js/api.js?v=6"></script>
-  <script src="js/supabase.js?v=8"></script>
+  <script src="js/supabase.js?v=9"></script>
   <script src="js/auth.js?v=16"></script>
   <!-- Word 转 Markdown（本地 vendor，仅选择 .docx/.docm 附件时用到） -->
   <script src="js/vendor/mammoth.min.js"></script>
@@ -147,6 +151,13 @@
             </div>
           </div>
 
+          <div class="s-field" id="s-hub-field" hidden>所属中心页（可选）
+            <select id="s-hub">
+              <option value="">宇宙与时间之外（杂文）</option>
+            </select>
+            <span class="s-hint">选择后作品会挂到对应枝干中心页，出现在时代之树的相应时代；不选即作为杂文，自动归入「宇宙与时间之外」类世界观。</span>
+          </div>
+
           <label class="s-field">正文内容<span class="s-req">*</span>
             <textarea id="s-body" maxlength="20000" placeholder="粘贴或直接书写作品正文（支持换行，最长 20000 字）"></textarea>
           </label>
@@ -209,6 +220,28 @@
           box.insertAdjacentElement("beforebegin", note);
         }
       }
+
+      // 所属中心页：按「根世界观 → 时代 → 枝干」分组填充（数据源 worlds.json / Worker）
+      const hubField = document.getElementById("s-hub-field");
+      const hubSelect = document.getElementById("s-hub");
+      try {
+        const worlds = await fetchSection("worlds");
+        const worldsWithHubs = (worlds || []).filter((w) => (w.hubs || []).length);
+        if (worldsWithHubs.length) {
+          for (const w of worldsWithHubs) {
+            const og = document.createElement("optgroup");
+            og.label = w.name;
+            for (const h of w.hubs) {
+              const op = document.createElement("option");
+              op.value = h.name;
+              op.textContent = (h.era ? `${h.era} · ` : "") + h.name;
+              og.appendChild(op);
+            }
+            hubSelect.appendChild(og);
+          }
+          hubField.hidden = false;
+        }
+      } catch (e) { /* 世界观数据不可用时隐藏该字段（降级为杂文），不阻塞投稿 */ }
 
       const form = document.getElementById("submit-form");
       const errEl = document.getElementById("s-err");
@@ -317,6 +350,8 @@
         const types = [...document.querySelectorAll("#s-types .s-opt.on")].map((el) => el.dataset.v);
         const contestsEl = document.getElementById("s-contests");
         const contests = contestsEl ? [...contestsEl.querySelectorAll(".s-opt.on")].map((el) => el.dataset.v) : [];
+        const hubEl = document.getElementById("s-hub");
+        const hub = hubEl ? hubEl.value.trim() : ""; // 所属中心页（选填）；空 = 杂文
 
         if (!title) return fail("请填写作品标题");
         if (!types.length) return fail("请至少选择一个投稿类型");
@@ -338,7 +373,7 @@
           submit.textContent = "提交中…";
           await callFn(FUNC_URL, {
             method: "POST",
-            body: JSON.stringify({ title, nickname, types, body, cover, attachment, contests }),
+            body: JSON.stringify({ title, nickname, types, body, cover, attachment, contests, hub }),
           });
           root.innerHTML = `
             <div class="submit-done">

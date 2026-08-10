@@ -12,6 +12,7 @@ const SB = {
   USER_KEY: "sb_user",
 
   // 会话
+  _refreshing: null, // 单飞：并发 401 时共享同一次续期，避免刷新令牌轮换竞态
   token() {
     return localStorage.getItem(this.TOKEN_KEY);
   },
@@ -36,22 +37,43 @@ const SB = {
     // 通知界面（auth.js）将登录态切回未登录
     window.dispatchEvent(new CustomEvent("sb-auth-changed"));
   },
-  // 用 refresh_token 换新 access_token；成功返回 true，失败清会话返回 false
+  // 用 refresh_token 换新 access_token；成功返回 true。
+  // 网络异常（离线/中断 ERR_ABORTED/超时）返回 false 但保留会话，避免误登出；
+  // 仅当服务端明确拒绝（令牌失效）才清除会话。
   async refresh() {
     const rt = localStorage.getItem(this.REFRESH_KEY);
     if (!rt) return false;
-    const res = await fetch(this.url + "/auth/v1/token?grant_type=refresh_token", {
-      method: "POST",
-      headers: { apikey: this.anon, "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: rt }),
+    if (this._refreshing) return this._refreshing;
+    this._refreshing = (async () => {
+      let res;
+      try {
+        res = await fetch(this.url + "/auth/v1/token?grant_type=refresh_token", {
+          method: "POST",
+          headers: { apikey: this.anon, "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: rt }),
+          signal: "timeout" in AbortSignal ? AbortSignal.timeout(12000) : undefined,
+        });
+      } catch (e) {
+        // 网络层中断（ERR_ABORTED / 离线 / 代理重置等）：不销毁会话，让调用方提示重试
+        return false;
+      }
+      let data = null;
+      try {
+        data = await res.json();
+      } catch (e) {
+        /* 非 JSON 响应按失败处理 */
+      }
+      if (res.ok && data && data.access_token) {
+        this.saveSession(data);
+        return true;
+      }
+      // 明确失败（401/400 等，刷新令牌无效或已撤销）：清除会话
+      this.clearSession();
+      return false;
+    })().finally(() => {
+      this._refreshing = null;
     });
-    const data = await res.json().catch(() => null);
-    if (res.ok && data && data.access_token) {
-      this.saveSession(data);
-      return true;
-    }
-    this.clearSession();
-    return false;
+    return this._refreshing;
   },
 
   // 基础请求（isRetry 用于 JWT 过期续期后重试，防止无限循环）
@@ -62,14 +84,31 @@ const SB = {
     if (opts.body !== undefined && !headers["Content-Type"]) {
       headers["Content-Type"] = "application/json";
     }
-    const res = await fetch(this.url + path, { ...opts, headers });
-    const text = await res.text();
-    const data = text ? JSON.parse(text) : null;
+    let res;
+    try {
+      res = await fetch(this.url + path, { ...opts, headers });
+    } catch (e) {
+      throw new Error("网络异常，请检查网络后重试");
+    }
+    let text = "";
+    try {
+      text = await res.text();
+    } catch (e) {
+      /* 忽略读取失败 */
+    }
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch (e) {
+      data = null;
+    }
     if (!res.ok) {
       // 401（token 过期/被撤销/无效）：自动用 refresh_token 续期后重试一次
       if (!isRetry && res.status === 401) {
         const refreshed = await this.refresh();
         if (refreshed) return this.request(path, opts, true);
+        // 刷新成功但原请求已过期（并发续期）：重试；刷新因网络失败未登出 → 提示网络
+        if (this.token()) throw new Error("网络异常，请检查网络后重试");
         throw new Error("登录已过期，请重新登录");
       }
       throw new Error((data && (data.msg || data.message || data.error_description)) || `请求失败 ${res.status}`);

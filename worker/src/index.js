@@ -32,6 +32,13 @@ const SITE_BASE = (globalThis.SITE_BASE && typeof globalThis.SITE_BASE === "stri
 const RESEND_FROM = (globalThis.RESEND_FROM && typeof globalThis.RESEND_FROM === "string")
   ? globalThis.RESEND_FROM
   : "onboarding@resend.dev";
+// Supabase 绑定（[vars] 注入）：配置后世界观/中心页优先读库（后台在线维护），否则降级 Notion
+const SUPABASE_URL = (globalThis.SUPABASE_URL && typeof globalThis.SUPABASE_URL === "string")
+  ? globalThis.SUPABASE_URL
+  : "";
+const SUPABASE_ANON_KEY = (globalThis.SUPABASE_ANON_KEY && typeof globalThis.SUPABASE_ANON_KEY === "string")
+  ? globalThis.SUPABASE_ANON_KEY
+  : "";
 
 // ---------- CORS ----------
 function corsHeaders() {
@@ -159,6 +166,7 @@ function mapWorld(row) {
     eras: parseEras(propText(p["时代线"])),
     cover: propCover(p["封面"]),
     shown: propBool(p["是否展示"]),
+    kind: "world", // Notion 世界观表无类型列；类世界观（宇宙与时间之外）由保留中心页合成
   };
 }
 
@@ -178,12 +186,96 @@ function mapHub(row) {
   };
 }
 
+/** 从 Supabase 读取某表全部行（配置了 SUPABASE_URL/ANON_KEY 时使用） */
+async function querySupabase(table, select, order) {
+  const url = `${SUPABASE_URL}/rest/v1/${table}?select=${encodeURIComponent(select)}&order=${encodeURIComponent(order)}`;
+  const res = await fetch(url, {
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+  });
+  if (!res.ok) throw new Error(`Supabase ${res.status}`);
+  return res.json();
+}
+
 async function loadWorlds() {
+  // 世界观优先读 Supabase（后台在线维护）；未配置或读取报错则降级 Notion
+  if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    try {
+      const rows = await querySupabase(
+        "worlds",
+        "id,name,summary,body,eras_text,cover,shown,kind,sort_order",
+        "sort_order.asc"
+      );
+      return rows
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          summary: r.summary,
+          body: r.body,
+          eras: parseEras(r.eras_text),
+          cover: r.cover || "",
+          shown: !!r.shown,
+          kind: r.kind === "meta" ? "meta" : "world",
+        }))
+        .filter((x) => x.name && x.shown);
+    } catch (e) {
+      console.warn("[api] Supabase worlds 读取失败，降级 Notion", e.message);
+    }
+  }
   const data = await queryDatabase(DB_WORLDS, { page_size: 100 });
-  return data.results.map(mapWorld).filter((x) => x.name && x.shown);
+  const worlds = data.results.map(mapWorld).filter((x) => x.name && x.shown);
+  // Notion 模式：把保留名中心页（宇宙与时间之外等）合成为「类世界观」根
+  const meta = await loadMetaWorldFromNotion();
+  if (meta && meta.shown && !worlds.some((w) => w.name === meta.name)) {
+    worlds.push(meta);
+  }
+  return worlds;
+}
+
+/** Notion 降级路径：从中心页表中把保留名行合成为一个类世界观根（kind='meta'，无时代线） */
+async function loadMetaWorldFromNotion() {
+  const data = await queryDatabase(DB_HUBS, { page_size: 100 });
+  const rows = data.results.map(mapHub).filter((x) => x.name && RESERVED_OUTSIDE.has(x.name));
+  if (!rows.length) return null;
+  const pick = rows.find((r) => r.name === "宇宙与时间之外") || rows[0];
+  return {
+    id: pick.id,
+    name: pick.name,
+    summary: pick.summary,
+    body: pick.body,
+    eras: [],
+    cover: pick.cover,
+    shown: pick.shown,
+    kind: "meta",
+  };
 }
 
 async function loadHubs() {
+  if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    try {
+      const rows = await querySupabase(
+        "hubs",
+        "id,name,world,era,theme,summary,body,sort,cover,shown",
+        "world.asc,sort.asc"
+      );
+      // 保留名行（宇宙与时间之外 / 世界与时间之外）不视为枝干中心页，直接剔除
+      return rows
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          world: r.world,
+          era: r.era,
+          theme: r.theme,
+          summary: r.summary,
+          body: r.body,
+          sort: r.sort || 0,
+          cover: r.cover || "",
+          shown: !!r.shown,
+        }))
+        .filter((x) => x.name && x.shown && !RESERVED_OUTSIDE.has(x.name));
+    } catch (e) {
+      console.warn("[api] Supabase hubs 读取失败，降级 Notion", e.message);
+    }
+  }
   const data = await queryDatabase(DB_HUBS, { page_size: 100 });
   // 保留名行（宇宙与时间之外 / 世界与时间之外）不视为枝干中心页，直接剔除
   return data.results
@@ -192,9 +284,11 @@ async function loadHubs() {
 }
 
 /** 据「所属中心页」推导 hubId/world/worldId/era：
- *  中心页为空 / 为保留名 / 已停用或不存在 → 一律按杂文处理（hub 及衍生字段全部置空） */
+ *  中心页为空 / 为保留名 / 已停用或不存在 → 自动并入「类世界观」（kind='meta'），
+ *  仅当类世界观未配置时保持杂文置空（hub 及衍生字段全部置空） */
 async function annotateWorks(works) {
   const [worlds, hubs] = await Promise.all([loadWorlds(), loadHubs()]);
+  const meta = worlds.find((x) => x.kind === "meta");
   const worldByName = new Map(worlds.map((w) => [w.name, w]));
   const hubByName = new Map(hubs.map((h) => [h.name, h]));
   for (const w of works) {
@@ -203,9 +297,14 @@ async function annotateWorks(works) {
     if (!hub) {
       w.hub = "";
       w.hubId = "";
-      w.world = "";
-      w.worldId = "";
       w.era = "";
+      if (meta) {
+        w.world = meta.name;
+        w.worldId = meta.id;
+      } else {
+        w.world = "";
+        w.worldId = "";
+      }
       continue;
     }
     const world = worldByName.get(hub.world);
@@ -245,6 +344,7 @@ async function loadWorldsSection() {
     return {
       id: w.id,
       name: w.name,
+      kind: w.kind || "world",
       summary: w.summary,
       body: w.body,
       eras: w.eras,
@@ -387,6 +487,7 @@ function mapSubmission(row) {
     attachment, // null 或 {name, url}
     email: propText(p["邮箱"]),
     contests: p["所属竞赛"]?.type === "multi_select" ? p["所属竞赛"].multi_select.map((s) => s.name) : [],
+    hub: propText(p["所属中心页"]), // 所属中心页（选填）；空 = 杂文
     created: p["提交时间"]?.type === "created_time" ? p["提交时间"].created_time : "",
   };
 }
@@ -468,6 +569,10 @@ async function createWorkPage(sub) {
       files: [{ name: sub.attachment.name || "attachment", external: { url: sub.attachment.url } }],
     };
   }
+  // 所属中心页（选填）：转录时挂靠枝干，作品库无此列则容错为杂文
+  if (sub.hub) {
+    properties["所属中心页"] = { select: { name: String(sub.hub).slice(0, 50) } };
+  }
 
   const mkBody = () =>
     JSON.stringify({ parent: { database_id: DB_WORKS }, properties });
@@ -500,6 +605,20 @@ async function createWorkPage(sub) {
     if (res.status === 400 && properties["正文"]) {
       delete properties["正文"];
       properties["简介"] = { rich_text: chunkText(String(sub.body || "")) };
+      const retry = await fetch("https://api.notion.com/v1/pages", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${NOTION_TOKEN}`,
+          "Notion-Version": NOTION_VERSION,
+          "Content-Type": "application/json",
+        },
+        body: mkBody(),
+      });
+      if (retry.ok) return (await retry.json()).id;
+    }
+    // 作品库缺「所属中心页」列时：去掉该字段重试（容错为杂文，不阻塞发布）
+    if (res.status === 400 && properties["所属中心页"]) {
+      delete properties["所属中心页"];
       const retry = await fetch("https://api.notion.com/v1/pages", {
         method: "POST",
         headers: {

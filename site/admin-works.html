@@ -17,6 +17,14 @@
   </script>
   <link rel="stylesheet" href="css/style.css?v=23">
   <link rel="stylesheet" href="css/admin.css?v=3">
+  <style>
+    .hub-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+    .hub-row select {
+      flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.45rem 0.6rem; color: var(--text); font-size: 0.86rem; outline: none;
+    }
+    .hub-row .a-btn { min-height: 2.2rem; padding: 0.3rem 0.9rem; font-size: 0.82rem; }
+  </style>
 </head>
 <body>
   <div data-nav></div>
@@ -35,11 +43,11 @@
 
   <div data-footer></div>
 
-  <script src="js/common.js?v=9"></script>
+  <script src="js/common.js?v=10"></script>
   <script src="js/api.js?v=6"></script>
-  <script src="js/supabase.js?v=8"></script>
+  <script src="js/supabase.js?v=9"></script>
   <script src="js/auth.js?v=16"></script>
-  <script src="js/admin.js?v=3"></script>
+  <script src="js/admin.js?v=4"></script>
   <script>
     const FUNC_URL = `${SB.url}/functions/v1/works-admin`;
 
@@ -94,6 +102,29 @@
         return;
       }
 
+      // 中心页列表（用于「作品归属」下拉）+ 类世界观（杂文归集）
+      let hubs = [];
+      let metaWorld = null;
+      try {
+        const [h, w] = await Promise.all([
+          SB.get("hubs", "select=name,world,era&order=world.asc,sort.asc"),
+          SB.get("worlds", "select=name,kind&order=sort_order.asc").catch(() => []),
+        ]);
+        hubs = Array.isArray(h) ? h : [];
+        metaWorld = (Array.isArray(w) ? w : []).find((x) => x.kind === "meta") || null;
+      } catch (e) {
+        console.warn("读取中心页失败，归属下拉为空:", e.message);
+      }
+      function hubOptions(selected) {
+        // 类世界观：无中心页作品自动并入；保存到「所属中心页」列（保留名，读取端再归入类世界观）
+        const metaOpt = metaWorld
+          ? `<option value="${esc(metaWorld.name)}"${selected === metaWorld.name ? " selected" : ""}>（类世界观）${esc(metaWorld.name)}</option>`
+          : "";
+        return `<option value=""${selected ? "" : " selected"}>（杂文）不设中心页</option>` +
+          metaOpt +
+          hubs.map((h) => `<option value="${esc(h.name)}"${selected === h.name ? " selected" : ""}>${esc(h.name)}${h.world ? `（${esc(h.world)}${h.era ? "·" + esc(h.era) : ""}）` : ""}</option>`).join("");
+      }
+
       function renderList() {
         const onCount = rows.filter((w) => w.status !== "已下架").length;
         root.innerHTML = `
@@ -111,7 +142,18 @@
                   <span class="tag-chip">${esc(Array.isArray(w.category) ? w.category.join("、") : (w.category || "未分类"))}</span>
                   <span>${esc(timeLabel(w.created))}</span>
                 </div>
+                <div class="a-card-meta">
+                  <span>归属：${w.hub
+                    ? (metaWorld && w.hub === metaWorld.name
+                        ? `类世界观 · ${esc(w.hub)}`
+                        : esc(w.hub))
+                    : `<span style="opacity:.6">杂文（未设中心页）</span>`}</span>
+                </div>
                 <div class="a-card-meta">投稿邮箱：<span class="meta-link">${esc(w.email || "（无投稿记录）")}</span></div>
+                <div class="hub-row">
+                  <select data-hub-sel="${esc(w.id)}">${hubOptions(w.hub)}</select>
+                  <button class="a-btn" data-act="hub" data-id="${esc(w.id)}" type="button">保存归属</button>
+                </div>
                 ${w.summary ? `<div class="a-card-text">${esc(String(w.summary).slice(0, 120))}</div>` : ""}
               </div>
               <div class="a-card-actions">
@@ -121,7 +163,7 @@
                 <button class="a-btn danger" data-act="delete" type="button">删除</button>
               </div>
             </div>`).join("")}
-          <p class="a-count" style="margin-top:1rem">下架/上架约 5 分钟内生效（等待同步）；删除为永久移除，请谨慎操作。</p>`;
+          <p class="a-count" style="margin-top:1rem">下架/上架/调整归属约 5 分钟内生效（等待同步）；删除为永久移除，请谨慎操作。</p>`;
 
         root.querySelectorAll(".a-card").forEach((item) => {
           const id = item.dataset.id;
@@ -143,7 +185,7 @@
                   message: "上架后前台作品列表与文章页将重新显示。",
                   okText: "上架",
                 });
-              } else {
+              } else if (act === "delete") {
                 ok = await window.adminConfirm({
                   title: `确认永久删除《${w.title || ""}》？`,
                   message: "此操作不可恢复（Notion 归档），请谨慎！",
@@ -155,15 +197,21 @@
               const btns = item.querySelectorAll("button");
               btns.forEach((b) => (b.disabled = true));
               try {
-                await callFn(FUNC_URL, { method: "POST", body: JSON.stringify({ action: act, id }) });
-                if (act === "delete") {
-                  rows = rows.filter((x) => x.id !== id);
-                  if (!rows.length) {
-                    root.innerHTML = `<div class="state">作品库已清空。</div>`;
-                    return;
-                  }
+                if (act === "hub") {
+                  const sel = item.querySelector(`[data-hub-sel="${id}"]`);
+                  await callFn(FUNC_URL, { method: "POST", body: JSON.stringify({ action: "set_hub", id, hub: sel ? sel.value : "" }) });
+                  w.hub = sel ? sel.value : "";
                 } else {
-                  w.status = act === "down" ? "已下架" : "已上架";
+                  await callFn(FUNC_URL, { method: "POST", body: JSON.stringify({ action: act, id }) });
+                  if (act === "delete") {
+                    rows = rows.filter((x) => x.id !== id);
+                    if (!rows.length) {
+                      root.innerHTML = `<div class="state">作品库已清空。</div>`;
+                      return;
+                    }
+                  } else {
+                    w.status = act === "down" ? "已下架" : "已上架";
+                  }
                 }
                 renderList();
               } catch (e) {

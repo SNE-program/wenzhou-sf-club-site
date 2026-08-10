@@ -31,6 +31,10 @@ jobs:
       - name: 生成静态数据
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          # 与 Worker / deploy.yml 保持一致：世界观/中心页走 Supabase 双轨
+          DATA_SOURCE: supabase
+          SUPABASE_URL: https://edfxoxcvprjzbemojshr.supabase.co
+          SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkZnhveGN2cHJqemJlbW9qc2hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTAzMDgsImV4cCI6MjEwMTUyNjMwOH0.ytkYFmJyYb00yBtYsxPE6Sh3HVmwrJfn2HuerFiV42U
         run: |
           node scripts/gen-site-data.mjs
           node scripts/gen-article-pages.mjs

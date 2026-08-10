@@ -27,6 +27,9 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const NOTION_TOKEN = (Deno.env.get("NOTION_TOKEN") ?? "").trim();
 const NOTION_VERSION = "2022-06-28";
 
+// DB_HUBS（中心页表）：用于「所属中心页」白名单校验；未配置则跳过校验（仅做清洗限长）
+const DB_HUBS = (Deno.env.get("DB_HUBS") ?? "").trim();
+
 // 环境变量缺失时优雅降级（避免裸 500 且不带 CORS 头）
 function envCheck(): string | null {
   if (!NOTION_TOKEN) return "\u6295\u7a3f\u670d\u52a1\u672a\u914d\u7f6e\uff08\u7f3a\u5c11 NOTION_TOKEN\uff09";
@@ -54,6 +57,7 @@ const S = {
   email: "\u90ae\u7bb1", // 邮箱
   contests: "\u6240\u5c5e\u7ade\u8d5b", // 所属竞赛
   attachment: "\u9644\u4ef6", // 附件
+  hub: "\u5c5e\u6240\u4e2d\u5fc3\u9875", // 所属中心页
   status: "\u5ba1\u6838\u72b6\u6001", // 审核状态
   pending: "\u5f85\u5ba1\u6838", // 待审核
 };
@@ -66,6 +70,33 @@ function chunkText(s, size = 2000) {
     chunks.push({ text: { content: str.slice(i, i + size) } });
   }
   return chunks.length ? chunks : [{ text: { content: "" } }];
+}
+
+/** 拉取中心页表全部「名称」（供「所属中心页」白名单校验）。
+ *  未配置 DB_HUBS 或查询失败时返回 null（调用方跳过校验，仅做清洗限长）。 */
+async function loadHubNames() {
+  if (!DB_HUBS) return null;
+  try {
+    const res = await fetch(`https://api.notion.com/v1/databases/${DB_HUBS}/query`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${NOTION_TOKEN}`,
+        "Notion-Version": NOTION_VERSION,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ page_size: 100 }),
+    });
+    if (!res.ok) return null;
+    const rows = (await res.json()).results || [];
+    return rows
+      .map((r) => {
+        const t = r.properties && r.properties["\u540d\u79f0"]; // 名称
+        return t && t.type === "title" ? t.title.map((x) => x.plain_text).join("") : "";
+      })
+      .filter(Boolean);
+  } catch {
+    return null;
+  }
 }
 
 /** 写入 Notion 投稿箱（审核状态=待审核） */
@@ -89,6 +120,9 @@ async function createSubmitPage(data) {
     properties[S.attachment] = {
       files: [{ name: data.attachment.name || "attachment", external: { url: data.attachment.url } }],
     };
+  }
+  if (data.hub) {
+    properties[S.hub] = { select: { name: data.hub } };
   }
 
   const mkBody = () =>
@@ -121,6 +155,26 @@ async function createSubmitPage(data) {
           page: await retry.json(),
           warning:
             "\u9644\u4ef6\u672a\u4fdd\u5b58\uff08\u6295\u7a3f\u7bb1\u7f3a\u5c11\u201c\u9644\u4ef6\u201d\u5217\uff0c\u8bf7\u544a\u77e5\u7ba1\u7406\u5458\uff09",
+        };
+      }
+    }
+    // 投稿箱缺「所属中心页」列时：去掉该字段重试（容错为杂文，不阻塞投稿）
+    if (res.status === 400 && properties[S.hub]) {
+      delete properties[S.hub];
+      const retry = await fetch("https://api.notion.com/v1/pages", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${NOTION_TOKEN}`,
+          "Notion-Version": NOTION_VERSION,
+          "Content-Type": "application/json",
+        },
+        body: mkBody(),
+      });
+      if (retry.ok) {
+        return {
+          page: await retry.json(),
+          warning:
+            "\u5c5e\u6240\u4e2d\u5fc3\u9875\u672a\u4fdd\u5b58\uff08\u6295\u7a3f\u7bb1\u7f3a\u5c11\u300c\u5c5e\u6240\u4e2d\u5fc3\u9875\u300d\u5217\uff0c\u8bf7\u544a\u77e5\u7ba1\u7406\u5458\uff09",
         };
       }
     }
@@ -205,6 +259,13 @@ export default {
     const contests = Array.isArray(body.contests)
       ? [...new Set(body.contests.map((t) => clean(t, 50)).filter(Boolean))].slice(0, 3)
       : [];
+    // 所属中心页（选填）：清洗限长 + 白名单校验（必须为当前存在的中心页名，否则置空为杂文；
+    // 未配置 DB_HUBS 时跳过校验，仅做清洗，转录阶段由 Worker 兜底容错为杂文）
+    let hub = clean(body.hub, 50);
+    if (hub) {
+      const hubNames = await loadHubNames();
+      if (hubNames && !hubNames.includes(hub)) hub = "";
+    }
     let cover = clean(body.cover, 2000) || "";
     if (cover && !/^https?:\/\//i.test(cover)) cover = "";
     // 附件：仅接受 http(s) 公开 URL（由前端上传到 Supabase Storage 后获得）+ 文件名
@@ -279,6 +340,7 @@ export default {
         email: user.email || "",
         contests,
         attachment,
+        hub,
       });
       const resp = { ok: true, id: page.id };
       if (warning) resp.warning = warning;

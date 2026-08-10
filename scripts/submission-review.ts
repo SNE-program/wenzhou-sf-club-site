@@ -59,6 +59,7 @@ const S = {
   email: "\u90ae\u7bb1", // 邮箱
   contests: "\u6240\u5c5e\u7ade\u8d5b", // 所属竞赛
   attachment: "\u9644\u4ef6", // 附件
+  hub: "\u5c5e\u6240\u4e2d\u5fc3\u9875", // 所属中心页
   created: "\u63d0\u4ea4\u65f6\u95f4", // 提交时间
   rejectReason: "\u62d2\u7edd\u539f\u56e0", // 拒绝原因
   notLogin: "\u672a\u767b\u5f55", // 未登录
@@ -118,6 +119,7 @@ function mapRow(row) {
     attachment,
     email: get(S.email),
     contests: get(S.contests) || [],
+    hub: get(S.hub), // 所属中心页（选填）
     created: get(S.created),
   };
 }

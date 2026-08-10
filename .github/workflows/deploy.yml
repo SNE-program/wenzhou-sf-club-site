@@ -27,6 +27,11 @@ jobs:
       - name: Generate site data from Notion
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          # 世界观/中心页双轨：DATA_SOURCE=supabase 时从 Supabase 在线维护数据生成
+          # （SUPABASE_URL / ANON_KEY 为公开凭据，前端 supabase.js 同款，无需 secret）
+          DATA_SOURCE: supabase
+          SUPABASE_URL: https://edfxoxcvprjzbemojshr.supabase.co
+          SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkZnhveGN2cHJqemJlbW9qc2hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTAzMDgsImV4cCI6MjEwMTUyNjMwOH0.ytkYFmJyYb00yBtYsxPE6Sh3HVmwrJfn2HuerFiV42U
         run: |
           if [ -z "$NOTION_TOKEN" ]; then
             echo "::warning::未配置 NOTION_TOKEN secret，使用仓库内已有的 data/*.json"

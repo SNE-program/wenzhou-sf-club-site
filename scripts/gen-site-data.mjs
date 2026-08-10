@@ -13,6 +13,13 @@ if (!NOTION_TOKEN) {
   process.exit(0);
 }
 
+// ---------- 数据源切换 ----------
+// DATA_SOURCE=supabase 时：世界观（worlds）/ 中心页（hubs）从 Supabase 读取
+// （网站后台在线维护，Supabase 为准；仅读取报错时降级 Notion）。其余数据仍从 Notion 读取。
+const DATA_SOURCE = process.env.DATA_SOURCE || "notion";
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
+
 // 数据库 ID（与 worker/wrangler.toml 保持一致；ID 非机密，可随仓库提交）
 const DBS = {
   site: process.env.DB_SITE || "3b339fd6-4004-81d9-b672-cda022e565bb",
@@ -152,6 +159,7 @@ function mapWorld(row) {
     eras: parseEras(propText(p["时代线"])),
     cover: propCover(p["封面"]),
     shown: propBool(p["是否展示"]),
+    kind: "world", // Notion 世界观表无类型列；类世界观（宇宙与时间之外）由保留中心页合成
   };
 }
 
@@ -234,15 +242,101 @@ async function loadMembers() {
 let cachedWorlds = null;
 let cachedHubs = null;
 
+/** 从 Supabase 读取某表全部行（DATA_SOURCE=supabase 时使用） */
+async function querySupabase(table, select, order) {
+  const url = `${SUPABASE_URL}/rest/v1/${table}?select=${encodeURIComponent(select)}&order=${encodeURIComponent(order)}`;
+  const res = await fetch(url, {
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+  });
+  if (!res.ok) throw new Error(`Supabase ${res.status}`);
+  return res.json();
+}
+
 async function loadWorlds() {
   if (cachedWorlds) return cachedWorlds;
+  if (DATA_SOURCE === "supabase") {
+    try {
+      const rows = await querySupabase(
+        "worlds",
+        "id,name,summary,body,eras_text,cover,shown,kind,sort_order",
+        "sort_order.asc"
+      );
+      cachedWorlds = rows
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          summary: r.summary,
+          body: r.body,
+          eras: parseEras(r.eras_text),
+          cover: r.cover || "",
+          shown: !!r.shown,
+          kind: r.kind === "meta" ? "meta" : "world",
+        }))
+        .filter((x) => x.name && x.shown);
+      console.log(`[gen-site-data] worlds 来自 Supabase（${cachedWorlds.length} 条）`);
+      return cachedWorlds;
+    } catch (e) {
+      console.warn(`[gen-site-data] Supabase worlds 读取失败，降级 Notion：${e.message}`);
+    }
+  }
   const data = await queryDatabase(DBS.worlds, { page_size: 100 });
   cachedWorlds = data.results.map(mapWorld).filter((x) => x.name && x.shown);
+  // Notion 模式：把保留名中心页（宇宙与时间之外等）合成为「类世界观」根
+  const meta = await loadMetaWorldFromNotion();
+  if (meta && meta.shown && !cachedWorlds.some((w) => w.name === meta.name)) {
+    cachedWorlds.push(meta);
+  }
   return cachedWorlds;
+}
+
+/** Notion 降级路径：从中心页表中把保留名行合成为一个类世界观根（kind='meta'，无时代线） */
+async function loadMetaWorldFromNotion() {
+  const data = await queryDatabase(DBS.hubs, { page_size: 100 });
+  const rows = data.results.map(mapHub).filter((x) => x.name && RESERVED_OUTSIDE.has(x.name));
+  if (!rows.length) return null;
+  const pick = rows.find((r) => r.name === "宇宙与时间之外") || rows[0];
+  return {
+    id: pick.id,
+    name: pick.name,
+    summary: pick.summary,
+    body: pick.body,
+    eras: [],
+    cover: pick.cover,
+    shown: pick.shown,
+    kind: "meta",
+  };
 }
 
 async function loadHubs() {
   if (cachedHubs) return cachedHubs;
+  if (DATA_SOURCE === "supabase") {
+    try {
+      const rows = await querySupabase(
+        "hubs",
+        "id,name,world,era,theme,summary,body,sort,cover,shown",
+        "world.asc,sort.asc"
+      );
+      cachedHubs = rows
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          world: r.world,
+          era: r.era,
+          theme: r.theme,
+          summary: r.summary,
+          body: r.body,
+          sort: r.sort || 0,
+          cover: r.cover || "",
+          shown: !!r.shown,
+        }))
+        // 保留名行（宇宙与时间之外 / 世界与时间之外）不视为枝干中心页，直接剔除
+        .filter((x) => x.name && x.shown && !RESERVED_OUTSIDE.has(x.name));
+      console.log(`[gen-site-data] hubs 来自 Supabase（${cachedHubs.length} 条）`);
+      return cachedHubs;
+    } catch (e) {
+      console.warn(`[gen-site-data] Supabase hubs 读取失败，降级 Notion：${e.message}`);
+    }
+  }
   const data = await queryDatabase(DBS.hubs, { page_size: 100 });
   // 保留名行（宇宙与时间之外 / 世界与时间之外）不视为枝干中心页，直接剔除
   cachedHubs = data.results
@@ -252,9 +346,11 @@ async function loadHubs() {
 }
 
 /** 据「所属中心页」推导 hubId/world/worldId/era：
- *  中心页为空 / 为保留名 / 已停用或不存在 → 一律按杂文处理（hub 及衍生字段全部置空） */
+ *  中心页为空 / 为保留名 / 已停用或不存在 → 自动并入「类世界观」（kind='meta'），
+ *  仅当类世界观未配置时保持杂文置空（hub 及衍生字段全部置空） */
 async function annotateWorks(works) {
   const [worlds, hubs] = await Promise.all([loadWorlds(), loadHubs()]);
+  const meta = worlds.find((x) => x.kind === "meta");
   const worldByName = new Map(worlds.map((w) => [w.name, w]));
   const hubByName = new Map(hubs.map((h) => [h.name, h]));
   for (const w of works) {
@@ -263,9 +359,14 @@ async function annotateWorks(works) {
     if (!hub) {
       w.hub = "";
       w.hubId = "";
-      w.world = "";
-      w.worldId = "";
       w.era = "";
+      if (meta) {
+        w.world = meta.name;
+        w.worldId = meta.id;
+      } else {
+        w.world = "";
+        w.worldId = "";
+      }
       continue;
     }
     const world = worldByName.get(hub.world);
@@ -295,6 +396,8 @@ async function loadWorldsData() {
         theme: h.theme,
         era: eraOrder.has(h.era) ? h.era : "", // 不匹配根时代名 → 根级未归档兜底
         sort: h.sort,
+        summary: h.summary,
+        body: h.body,
         workCount: countByHub.get(h.id) || 0,
       }))
       .sort((a, b) => {
@@ -305,6 +408,7 @@ async function loadWorldsData() {
     return {
       id: w.id,
       name: w.name,
+      kind: w.kind || "world",
       summary: w.summary,
       body: w.body,
       eras: w.eras,

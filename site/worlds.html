@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>世界观 · 温州中学科学及幻想文学社</title>
+  <meta name="description" content="以世界观为导向的文章组织：时代之树 × 枝干中心页。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="世界观 · 温州中学科学及幻想文学社">
+  <meta property="og:description" content="走进每个时代，探索属于它的故事。">
+  <meta property="og:image" content="https://sne-program.github.io/wenzhou-sf-club-site/images/og-default.png">
+  <meta property="og:url" content="https://sne-program.github.io/wenzhou-sf-club-site/worlds.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>世界观</h1>
+      <div class="sub">以世界观为导向组织作品 —— 每棵「时代之树」都有属于它的故事。</div>
+    </div>
+
+    <div class="grid" id="worlds">
+      <div class="state"><div class="spinner"></div>正在加载世界观……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=10"></script>
+  <script src="js/api.js?v=6"></script>
+  <script src="js/supabase.js?v=9"></script>
+  <script src="js/auth.js?v=16"></script>
+  <script>
+    (async function () {
+      const worlds = await fetchSection("worlds");
+
+      const grid = document.getElementById("worlds");
+      const esc = window.esc || ((s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      }[c])));
+
+      const isMeta = (w) => w.kind === "meta";
+      const cards = (worlds || []).map((w) => {
+        const meta = isMeta(w);
+        return `
+        <a class="card" href="worlds/${encodeURIComponent(w.id)}.html">
+          <div class="card-cover" style="${coverStyle(w, w.name)}"><span class="cover-title">${esc(coverText(w.name))}</span></div>
+          <div class="card-body">
+            <h3>${esc(w.name)}${meta ? ` <span class="meta-badge">类世界观</span>` : ""}</h3>
+            <p>${esc(w.summary || (meta ? "杂文 —— 不归属任何世界观的篇章，漂流在时代与宇宙之外。" : "未填写简介"))}</p>
+            <div class="card-meta">
+              ${meta
+                ? `<span>类世界观</span><span>${w.workCount || 0} 篇杂文</span>`
+                : `<span>${w.eras && w.eras.length ? `${w.eras.length} 个时代` : "未设时代线"}</span><span>${w.hubCount || 0} 个枝干</span><span>${w.workCount || 0} 篇作品</span>`}
+            </div>
+          </div>
+        </a>`;
+      });
+
+      // 类世界观徽标样式
+      const badgeStyle = document.createElement("style");
+      badgeStyle.textContent = `.meta-badge{display:inline-block;vertical-align:middle;margin-left:6px;font-size:11px;font-weight:600;letter-spacing:1px;color:var(--teal,#3fd8c5);border:1px solid rgba(63,216,197,.45);border-radius:999px;padding:1px 8px;}`;
+      document.head.appendChild(badgeStyle);
+
+      grid.innerHTML = cards.length
+        ? cards.join("")
+        : `<div class="state">暂无世界观，稍后再来看看吧。</div>`;
+    })().catch((e) => {
+      document.querySelector("#worlds").innerHTML =
+        `<div class="state">世界观加载失败，请检查网络后重试。<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+      console.error(e);
+    });
+  </script>
+</body>
+</html>

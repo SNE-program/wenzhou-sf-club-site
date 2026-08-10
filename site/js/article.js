@@ -128,6 +128,15 @@
   function renderArticle() {
     const box = document.getElementById("detail");
     const metaBits = [];
+    // 世界观面包屑：有枝干 → 超链到枝干页；杂文 → 弱化显示
+    if (article.hubId && article.hub) {
+      const chain = [article.world, article.era, article.hub].filter(Boolean).join(" · ");
+      metaBits.push(`<a class="meta-link" href="../worlds/${encodeURIComponent(article.hubId)}.html">🌌 ${esc(chain)}</a>`);
+    } else if (article.worldId) {
+      metaBits.push(`<a class="meta-link" href="../worlds/${encodeURIComponent(article.worldId)}.html">🌌 ${esc(article.world)}</a>`);
+    } else if (TYPE === "works") {
+      metaBits.push(`<span class="meta-plain">🌌 杂文</span>`);
+    }
     if (TYPE === "activities") metaBits.push(`📅 ${esc(dateLabel(article.date))}`);
     if (article.location) metaBits.push(`📍 ${esc(article.location)}`);
     // 分类已支持多选（数组），链接取首个分类便于回列表页筛选

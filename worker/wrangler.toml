@@ -16,6 +16,10 @@ DB_HUBS = "3b739fd6-4004-80c5-8cb2-ead40207fe30"
 SITE_BASE = "https://wzmssf.club"
 RESEND_FROM = "onboarding@resend.dev"
 GH_REPO = "SNE-program/wenzhou-sf-club-site"
+# ⚠️ Supabase 双轨（世界观/中心页在线维护）：与 CI 的 DATA_SOURCE=supabase 同时启用，
+#   二者都读 Supabase → 指纹一致 → 不会无限触发同步。
+SUPABASE_URL = "https://edfxoxcvprjzbemojshr.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkZnhveGN2cHJqemJlbW9qc2hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTAzMDgsImV4cCI6MjEwMTUyNjMwOH0.ytkYFmJyYb00yBtYsxPE6Sh3HVmwrJfn2HuerFiV42U"
 
 # 投稿结果邮件定时任务（每 5 分钟）
 [triggers]
