@@ -406,6 +406,7 @@ async function loadWorldsData() {
         sort: h.sort,
         summary: h.summary,
         body: h.body,
+        cover: h.cover,
         workCount: countByHub.get(h.id) || 0,
       }))
       .sort((a, b) => {

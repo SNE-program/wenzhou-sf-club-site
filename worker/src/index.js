@@ -342,6 +342,9 @@ async function loadWorldsSection() {
         theme: h.theme,
         era: eraOrder.has(h.era) ? h.era : "", // 不匹配根时代名 → 根级未归档兜底
         sort: h.sort,
+        summary: h.summary,
+        body: h.body,
+        cover: h.cover,
         workCount: countByHub.get(h.id) || 0,
       }))
       .sort((a, b) => {
