@@ -87,6 +87,23 @@
       });
     }
 
+    // 写回 Notion（备份同步）：后台为主，保存/删除后同步到 Notion 对应表。
+    // notion_id 记录 Notion 行 id；为空时由服务端按名称匹配或新建，返回后回填。
+    async function syncNotion(payload) {
+      const res = await fetch(SB.url + "/functions/v1/sync-notion", {
+        method: "POST",
+        headers: {
+          apikey: SB.anon,
+          Authorization: "Bearer " + (SB.token() || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || ("同步失败 " + res.status));
+      return j;
+    }
+
     // 时代线解析（与 gen-site-data / Worker 同一规则）：
     // 每条时代以「名称 | 时间段 | 简介首段」起头，其后可跟续段与引言行；
     // 以 “ 开头的行 → quote（引言），其余续行 → 追加到 desc 段落
@@ -347,6 +364,14 @@
             item.querySelectorAll("button").forEach((b) => (b.disabled = true));
             try {
               await SB.remove(currentTab, `id=eq.${id}`);
+              // 同步删除 Notion 备份（尽力而为）
+              if (rec?.notion_id) {
+                try {
+                  await syncNotion({ table: currentTab, action: "delete", id, notion_id: rec.notion_id });
+                } catch (e2) {
+                  console.warn("Notion 同步删除失败", e2);
+                }
+              }
               if (currentTab === "worlds") worlds = worlds.filter((r) => r.id !== id);
               else hubs = hubs.filter((r) => r.id !== id);
               render();
@@ -477,11 +502,29 @@
           btn.disabled = true;
           btn.textContent = "保存中…";
           try {
+            let rowId = id;
             if (id) {
               await SB.update(currentTab, body, `id=eq.${id}`);
             } else {
               // worlds/hubs 的 id 列为 uuid 主键且无默认值，新建时前端生成
-              await SB.insert(currentTab, { id: genUuid(), ...body });
+              rowId = genUuid();
+              await SB.insert(currentTab, { id: rowId, ...body });
+            }
+            // 写回 Notion（备份；失败不阻塞后台保存）
+            try {
+              const cur = (currentTab === "worlds" ? worlds : hubs).find((r) => r.id === rowId);
+              const sync = await syncNotion({
+                table: currentTab,
+                action: "save",
+                id: rowId,
+                notion_id: cur?.notion_id || "",
+                data: body,
+              });
+              if (sync.notion_id && !cur?.notion_id) {
+                await SB.update(currentTab, { notion_id: sync.notion_id }, `id=eq.${rowId}`);
+              }
+            } catch (e2) {
+              alert("已保存，但同步 Notion 失败：" + e2.message);
             }
             await loadAll();
             render();
