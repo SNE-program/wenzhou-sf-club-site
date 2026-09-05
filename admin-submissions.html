@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>投稿审核 · 温州中学科学及幻想文学社</title>
+  <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+  <link rel="stylesheet" href="css/admin.css?v=3">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>投稿审核</h1>
+      <div class="sub">审核投稿箱中的新稿件。通过后系统会自动发布到作品库并邮件通知投稿人（最多约 5 分钟）；拒绝时建议填写原因。</div>
+    </div>
+    <div id="admin-nav"></div>
+
+    <div id="admin-root">
+      <div class="state"><div class="spinner"></div>正在加载……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=10"></script>
+  <script src="js/api.js?v=7"></script>
+  <script src="js/supabase.js?v=9"></script>
+  <script src="js/auth.js?v=16"></script>
+  <script src="js/admin.js?v=4"></script>
+  <script>
+    const FUNC_URL = `${SB.url}/functions/v1/submission-review`;
+
+    async function callFn(url, opts = {}) {
+      const res = await fetch(url, {
+        ...opts,
+        headers: {
+          apikey: SB.anon,
+          Authorization: "Bearer " + SB.token(),
+          "Content-Type": "application/json",
+          ...(opts.headers || {}),
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `请求失败 ${res.status}`);
+      return data;
+    }
+
+    function timeLabel(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    function preview(text) {
+      const s = String(text || "").replace(/\s+/g, " ").trim();
+      return s.length > 180 ? s.slice(0, 180) + "…" : s;
+    }
+
+    (async function () {
+      const root = document.getElementById("admin-root");
+      const user = SB.user();
+      if (!user) {
+        root.innerHTML = `<div class="state"><p>请先登录管理员账号</p><p style="margin-top:1rem"><button class="btn" id="go-login" type="button">登录</button></p></div>`;
+        document.getElementById("go-login").addEventListener("click", () => window.openAuthModal("login"));
+        return;
+      }
+      const me = await window.getMyProfile();
+      if (!me || !me.is_admin) {
+        root.innerHTML = `<div class="state">你没有管理权限。</div>`;
+        return;
+      }
+
+      const stats = await window.loadTodoStats();
+      window.adminNav("admin-submissions.html", stats);
+
+      let rows = [];
+      try {
+        rows = await callFn(FUNC_URL);
+      } catch (e) {
+        root.innerHTML = `<div class="state">加载失败：${esc(e.message)}<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+        return;
+      }
+      // 列表加载成功后，以实际列表数为准刷新徽标（避免统计请求偶发失败导致「按钮 0、列表 N」不一致）
+      if (stats.submissions !== rows.length) {
+        stats.submissions = rows.length;
+        window.adminNav("admin-submissions.html", stats);
+      }
+
+      function renderList() {
+        root.innerHTML = `
+          <div class="a-count">待审核 <b>${rows.length}</b> 篇</div>
+          ${rows.length
+            ? rows.map((s) => `
+              <div class="a-card" data-id="${esc(s.id)}">
+                ${s.cover
+                  ? `<div class="a-cover" style="background-image:url('${esc(s.cover)}')"></div>`
+                  : `<div class="a-cover" style="background:linear-gradient(135deg,#1c1030,#3a2a6e)">${esc(String(s.title || "?").charAt(0))}</div>`}
+                <div class="a-card-main">
+                  <div class="a-card-title">${esc(s.title || "（无标题）")}</div>
+                  <div class="a-card-meta">
+                    <span>${esc(s.author || "匿名")} · ${esc(timeLabel(s.created))}</span>
+                    ${(s.types || []).map((t) => `<span class="tag-chip">${esc(t)}</span>`).join("")}
+                    ${(s.contests || []).map((t) => `<span class="tag-chip contest">🏆 ${esc(t)}</span>`).join("")}
+                    ${s.hub ? `<span class="tag-chip hub">🌌 ${esc(s.hub)}</span>` : `<span class="tag-chip hub">🌌 杂文</span>`}
+                    ${s.email ? `<span>✉ ${esc(s.email)}</span>` : ""}
+                  </div>
+                  <div class="a-card-text">${esc(preview(s.body))}</div>
+                  <div class="a-card-meta" style="margin-top:0.5rem">
+                    <button class="a-btn ghost" type="button" data-act="view">查看全文</button>
+                    <span class="s-hint" style="font-size:0.78rem;color:var(--text-dim)">共 ${String(s.body || "").length} 字</span>
+                  </div>
+                  ${s.attachment && s.attachment.url ? `<div class="a-card-meta" style="margin-top:0.4rem"><a href="${esc(s.attachment.url)}" target="_blank" rel="noopener">📎 附件：${esc(s.attachment.name || "下载")}</a></div>` : ""}
+                </div>
+                <div class="a-card-actions">
+                  <button class="a-btn" data-act="approve" type="button">通过</button>
+                  <button class="a-btn danger" data-act="reject" type="button">拒绝</button>
+                </div>
+              </div>`).join("")
+            : `<div class="state">当前没有待审核的投稿。注册用户可通过网站的「投稿」页提交，提交后自动出现在这里。</div>`}`;
+        root.querySelectorAll(".a-card").forEach((item) => {
+          const id = item.dataset.id;
+          item.querySelector('[data-act="approve"]').addEventListener("click", () => review(id, "approve"));
+          item.querySelector('[data-act="reject"]').addEventListener("click", () => review(id, "reject"));
+          const s = rows.find((r) => r.id === id);
+          const openView = () => {
+            if (!s) return;
+            window.adminView({
+              title: `《${s.title || "无标题"}》 · ${s.author || "匿名"}`,
+              body: s.body || "（无正文内容）",
+            });
+          };
+          const viewBtn = item.querySelector('[data-act="view"]');
+          if (viewBtn) viewBtn.addEventListener("click", openView);
+          const textEl = item.querySelector(".a-card-text");
+          if (textEl && s && (s.body || "").length > 180) {
+            textEl.style.cursor = "pointer";
+            textEl.addEventListener("click", openView);
+          }
+        });
+      }
+
+      async function review(id, action) {
+        const s = rows.find((r) => r.id === id);
+        if (!s) return;
+        let reason = "";
+        if (action === "reject") {
+          reason = (await window.adminPrompt({
+            title: `拒绝投稿《${s.title || ""}》`,
+            message: "可填写原因（将随邮件通知投稿人）；留空将不附带原因。",
+            placeholder: "例如：主题不符 / 内容不完整 / 需修改后重新投稿",
+            okText: "确认拒绝",
+          })) || "";
+        } else {
+          const ok = await window.adminConfirm({
+            title: `确认通过《${s.title || ""}》？`,
+            message: "系统将自动发布到作品库并邮件通知投稿人（约 5 分钟内上架）。",
+            okText: "通过",
+          });
+          if (!ok) return;
+        }
+        const btns = document.querySelectorAll(`.a-card[data-id="${id}"] button`);
+        btns.forEach((b) => (b.disabled = true));
+        try {
+          await callFn(FUNC_URL, {
+            method: "POST",
+            body: JSON.stringify({ action, id, reason }),
+          });
+          rows = rows.filter((r) => r.id !== id);
+          if (!rows.length) {
+            root.innerHTML = `<div class="state">已处理完毕，当前没有待审核投稿。</div>`;
+          } else {
+            renderList();
+          }
+          // 刷新导航徽标
+          const s2 = await window.loadTodoStats();
+          window.adminNav("admin-submissions.html", s2);
+        } catch (e) {
+          alert("操作失败：" + e.message);
+          btns.forEach((b) => (b.disabled = false));
+        }
+      }
+
+      renderList();
+    })();
+  </script>
+</body>
+</html>

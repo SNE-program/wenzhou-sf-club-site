@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>举报处理 · 温州中学科学及幻想文学社</title>
+  <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+  <link rel="stylesheet" href="css/admin.css?v=3">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>举报处理</h1>
+      <div class="sub">处理读者对评论的举报：可忽略、删除评论，或拉黑用户（拉黑后该用户评论隐藏、禁止再互动）。</div>
+    </div>
+    <div id="admin-nav"></div>
+
+    <div id="admin-root">
+      <div class="state"><div class="spinner"></div>正在加载……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=10"></script>
+  <script src="js/api.js?v=7"></script>
+  <script src="js/supabase.js?v=9"></script>
+  <script src="js/auth.js?v=16"></script>
+  <script src="js/admin.js?v=4"></script>
+  <script>
+    function timeLabel(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+    function preview(text, n) {
+      const s = String(text || "").replace(/\s+/g, " ").trim();
+      return s.length > n ? s.slice(0, n) + "…" : s;
+    }
+
+    (async function () {
+      const root = document.getElementById("admin-root");
+      const user = SB.user();
+      if (!user) {
+        root.innerHTML = `<div class="state"><p>请先登录管理员账号</p><p style="margin-top:1rem"><button class="btn" id="go-login" type="button">登录</button></p></div>`;
+        document.getElementById("go-login").addEventListener("click", () => window.openAuthModal("login"));
+        return;
+      }
+      const me = await window.getMyProfile();
+      if (!me || !me.is_admin) {
+        root.innerHTML = `<div class="state">你没有管理权限。</div>`;
+        return;
+      }
+
+      const stats = await window.loadTodoStats();
+      window.adminNav("admin-reports.html", stats);
+
+      // 文章标题映射（用于展示被举报评论所在文章）
+      let articleMap = {};
+      try {
+        const [works, acts] = await Promise.all([fetchSection("works"), fetchSection("activities")]);
+        [...works, ...acts].forEach((it) => {
+          articleMap[it.id] = { title: it.title, type: it.category ? "works" : "activities" };
+        });
+      } catch (e) { /* 映射失败不阻塞 */ }
+
+      let reports = [];
+      let commentsById = {};
+      let profilesById = {};
+
+      async function load() {
+        reports = await SB.get("reports", "status=eq.pending&select=*&order=created_at.asc&limit=200");
+        const commentIds = [...new Set(reports.map((r) => r.comment_id))];
+        const userIds = [...new Set(reports.map((r) => r.user_id))];
+        commentsById = {};
+        profilesById = {};
+        if (commentIds.length) {
+          const cs = await SB.get("comments", `id=in.(${commentIds.join(",")})&select=id,user_id,article_id,content,status`);
+          cs.forEach((c) => (commentsById[c.id] = c));
+          cs.forEach((c) => userIds.push(c.user_id));
+        }
+        const allUids = [...new Set(userIds)].filter(Boolean);
+        if (allUids.length) {
+          const ps = await SB.get("profiles", `user_id=in.(${allUids.join(",")})&select=user_id,nickname,status`);
+          ps.forEach((p) => (profilesById[p.user_id] = p));
+        }
+      }
+
+      function render() {
+        if (!reports.length) {
+          root.innerHTML = `<div class="state">当前没有待处理的举报。</div>`;
+          return;
+        }
+        root.innerHTML = `
+          <div class="a-count">待处理举报 <b>${reports.length}</b> 条</div>
+          ${reports.map((r) => {
+            const c = commentsById[r.comment_id] || null;
+            const art = c ? articleMap[c.article_id] : null;
+            const reporter = profilesById[r.user_id];
+            const author = c ? profilesById[c.user_id] : null;
+            return `
+            <div class="a-card" data-id="${r.id}" data-cid="${c ? c.id : ""}" data-uid="${c ? c.user_id : ""}">
+              <div class="a-card-main">
+                <div class="a-card-title">${esc(c ? (author && author.nickname) || "（用户）" : "评论已不存在")}${c && c.status === "deleted" ? ` <span class="status-badge">评论已删除</span>` : ""}</div>
+                <div class="a-card-meta">
+                  ${art ? `<a class="meta-link" href="articles/${encodeURIComponent(c.article_id)}.html" target="_blank">📄 ${esc(art.title)}</a>` : (c ? `<span>文章 ${esc(c.article_id)}</span>` : "")}
+                  <span>举报人：${esc((reporter && reporter.nickname) || "（用户）")}（${esc(timeLabel(r.created_at))}）</span>
+                </div>
+                <div class="a-card-text">${esc(c ? preview(c.content, 120) : "—")}</div>
+                <div class="a-card-meta" style="margin-top:0.45rem"><span class="tag-chip">原因：${esc(r.reason || "未填写")}</span></div>
+              </div>
+              <div class="a-card-actions">
+                <button class="a-btn ghost" data-act="dismiss" type="button">忽略</button>
+                ${c ? `<button class="a-btn warn" data-act="delete-comment" type="button">删除评论</button>` : ""}
+                ${c ? `<button class="a-btn danger" data-act="ban" type="button">拉黑用户</button>` : ""}
+              </div>
+            </div>`;
+          }).join("")}`;
+        root.querySelectorAll(".a-card").forEach((item) => {
+          const id = item.dataset.id;
+          item.querySelectorAll("[data-act]").forEach((btn) => {
+            btn.addEventListener("click", () => handle(id, btn.dataset.act, item));
+          });
+        });
+      }
+
+      async function handle(id, act, item) {
+        const r = reports.find((x) => x.id === id);
+        const c = commentsById[r.comment_id] || null;
+        if (act === "dismiss") {
+          const ok = await window.adminConfirm({ title: "忽略这条举报？", message: "不会对评论或用户做任何处理。", okText: "忽略" });
+          if (!ok) return;
+          await SB.update("reports", { status: "dismissed" }, `id=eq.${id}`);
+        } else if (act === "delete-comment") {
+          const ok = await window.adminConfirm({ title: "删除这条被举报的评论？", message: "评论将从前台消失。", danger: true, okText: "删除" });
+          if (!ok) return;
+          await SB.update("comments", { status: "deleted" }, `id=eq.${c.id}`);
+          await SB.update("reports", { status: "resolved" }, `id=eq.${id}`);
+        } else if (act === "ban") {
+          const nick = (profilesById[c.user_id] || {}).nickname || "该用户";
+          const ok = await window.adminConfirm({
+            title: `拉黑「${nick}」？`,
+            message: "其评论将全部隐藏，且无法再评论、表态、举报。",
+            danger: true,
+            okText: "拉黑",
+          });
+          if (!ok) return;
+          // 1) 状态置为 rejected（RLS 层禁止再互动）
+          await SB.update("profiles", { status: "rejected" }, `user_id=eq.${c.user_id}`);
+          // 2) 隐藏该用户所有有效评论
+          await SB.update("comments", { status: "deleted" }, `user_id=eq.${c.user_id}&status=eq.active`);
+          // 3) 该用户名下未处理的举报一并结案；被举报评论相关的待处理举报结案
+          const uids = await SB.get("comments", `user_id=eq.${c.user_id}&select=id`);
+          const cids = uids.map((x) => x.id);
+          const idParts = [];
+          idParts.push(`user_id=eq.${c.user_id}`);
+          if (cids.length) idParts.push(`comment_id=in.(${cids.join(",")})`);
+          await SB.update("reports", { status: "resolved" }, idParts.join("&") + "&status=eq.pending");
+        }
+        reports = reports.filter((x) => x.id !== id);
+        if (!reports.length) {
+          root.innerHTML = `<div class="state">已处理完毕，当前没有待处理举报。</div>`;
+        } else {
+          render();
+        }
+        // 刷新导航徽标
+        const s2 = await window.loadTodoStats();
+        window.adminNav("admin-reports.html", s2);
+      }
+
+      try {
+        await load();
+        render();
+      } catch (e) {
+        root.innerHTML = `<div class="state">加载失败：${esc(e.message)}<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+      }
+    })();
+  </script>
+</body>
+</html>
