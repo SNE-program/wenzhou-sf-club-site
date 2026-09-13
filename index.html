@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>温州中学科学及幻想文学社</title>
+  <meta name="description" content="温州中学科学及幻想文学社 —— 读科幻、写幻想、观星象、聊未来。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="温州中学科学及幻想文学社">
+  <meta property="og:description" content="读科幻、写幻想、观星象、聊未来。">
+  <meta property="og:image" content="https://sne-program.github.io/wenzhou-sf-club-site/images/og-default.png">
+  <meta property="og:url" content="https://sne-program.github.io/wenzhou-sf-club-site/">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div data-nav></div>
+
+  <!-- 英雄区（全宽铺满，独立于内容容器） -->
+  <section class="hero" id="hero">
+    <!-- 复古太阳射线 + 轨道装饰（背景层） -->
+    <div class="hero-rays" aria-hidden="true"></div>
+    <div class="hero-orbit" aria-hidden="true"><span class="orbit-dot"></span><span class="orbit-dot two"></span></div>
+
+    <!-- 五环浑天仪 · 标题下方背景层 -->
+    <div class="armillary-stage" id="armillary" aria-hidden="true"></div>
+
+    <div class="hero-inner">
+      <div class="hero-badge"><span class="badge-dot" aria-hidden="true"></span>EST. 2024 · WZMS S&amp;F REGISTRY 057</div>
+      <h1><span id="hero-name">温州中学科学及幻想文学社</span></h1>
+      <p id="hero-intro">正在载入社团简介……</p>
+      <div class="hero-cta">
+        <a class="btn" href="activities.html">近期活动 <span aria-hidden="true">→</span></a>
+        <a class="btn ghost" href="about.html">了解我们</a>
+      </div>
+      <div class="hero-scroll" aria-hidden="true"><span></span></div>
+    </div>
+
+    <!-- 观测坐标标注 -->
+    <div class="hero-coord" aria-hidden="true">N 28°00′ · E 120°41′ · WENZHOU OBSERVATORY</div>
+  </section>
+
+  <main class="container">
+    <!-- 最新活动 -->
+    <h2 class="section-title">近期活动</h2>
+    <div class="grid" id="activities">
+      <div class="state"><div class="spinner"></div>正在加载活动……</div>
+    </div>
+    <p style="margin-top:1rem"><a class="btn ghost" href="activities.html">查看全部活动 →</a></p>
+
+    <!-- 精选作品 -->
+    <h2 class="section-title">社员作品</h2>
+    <div class="grid" id="works">
+      <div class="state"><div class="spinner"></div>正在加载作品……</div>
+    </div>
+    <p style="margin-top:1rem"><a class="btn ghost" href="works.html">查看全部作品 →</a></p>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=10"></script>
+  <script src="js/api.js?v=7"></script>
+  <script src="js/supabase.js?v=9"></script>
+  <script src="js/auth.js?v=16"></script>
+
+  <!-- 五环浑天仪 · 英雄区背景层（随 SF 风格切换配色，可在显示设置中勾选开启） -->
+  <script type="module">
+    const stage = document.getElementById("armillary");
+    let armillary = null;
+    const VALID_STYLES = ["brass", "neon", "aurora"];
+
+    function currentStyle() {
+      const s = document.documentElement.getAttribute("data-style") || "brass";
+      return VALID_STYLES.includes(s) ? s : "brass";
+    }
+    function armillaryOn() {
+      try { return localStorage.getItem("wzsf-armillary") === "1"; } catch (e) { return false; }
+    }
+    function minimalOn() {
+      return document.documentElement.classList.contains("minimal");
+    }
+
+    async function mountArmillary() {
+      if (!stage || !armillaryOn() || minimalOn()) return;
+      if (armillary) {
+        try { armillary.dispose(); } catch (e) { /* 忽略 */ }
+        armillary = null;
+      }
+      try {
+        const { createArmillary } = await import("./js/armillary.js");
+        armillary = createArmillary(stage, {
+          interactive: false,
+          wheelZoom: false,
+          autoRotate: true,
+          theme: currentStyle(),
+        });
+      } catch (e) {
+        console.warn("[浑天仪] 三维组件加载失败，舞台自动隐藏。", e);
+        stage.classList.add("arm-failed");
+      }
+    }
+    function unmountArmillary() {
+      if (armillary) {
+        try { armillary.dispose(); } catch (e) { /* 忽略 */ }
+        armillary = null;
+        window.__armillary = null;
+      }
+    }
+
+    window.addEventListener("wzsf:style", mountArmillary);
+    window.addEventListener("wzsf:armillary", () => {
+      if (armillaryOn() && !minimalOn()) mountArmillary();
+      else unmountArmillary();
+    });
+    window.addEventListener("wzsf:minimal", () => {
+      if (minimalOn()) unmountArmillary();
+      else mountArmillary();
+    });
+    mountArmillary();
+  </script>
+  <script>
+    (async function () {
+      // 站点信息
+      try {
+        const site = await fetchSection("site");
+        const nameEl = document.querySelector("#hero-name");
+        const introEl = document.querySelector("#hero-intro");
+        if (site.name) nameEl.textContent = site.name;
+        introEl.textContent = site.intro || introEl.textContent;
+        document.title = (site.name || document.title) + " · 温中科幻社";
+      } catch (e) {
+        console.warn(e);
+        // 站点信息加载失败：降级为默认简介，避免停留在「正在载入社团简介……」
+        const introEl = document.querySelector("#hero-intro");
+        if (introEl && introEl.textContent.includes("正在载入")) {
+          introEl.textContent = "读科幻、写幻想、观星象、聊未来。";
+        }
+      }
+
+      // 近期活动（取前 3 条）
+      try {
+        const acts = (await fetchSection("activities")).slice(0, 3);
+        document.querySelector("#activities").innerHTML = acts.length
+          ? acts.map((it) => `
+            <a class="card" href="articles/${encodeURIComponent(it.id)}.html">
+              <div class="card-cover" style="${coverStyle(it, it.title)}"><span class="cover-title">${esc(coverText(it.title))}</span></div>
+              <div class="card-body">
+                <h3>${esc(it.title)}</h3>
+                <p>${esc(it.summary)}</p>
+                <div class="card-meta">
+                  <span>${esc(dateLabel(it.date))}</span>
+                  ${it.location ? `<span>${esc(it.location)}</span>` : ""}
+                </div>
+              </div>
+            </a>`).join("")
+          : `<div class="state">暂无活动，敬请期待</div>`;
+      } catch (e) {
+        console.warn(e);
+        document.querySelector("#activities").innerHTML =
+          `<div class="state">活动加载失败，请检查网络后重试。<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+      }
+
+      // 精选作品（取前 3 条）
+      try {
+        const works = (await fetchSection("works")).slice(0, 3);
+        document.querySelector("#works").innerHTML = works.length
+          ? works.map((it) => `
+            <a class="card" href="articles/${encodeURIComponent(it.id)}.html">
+              <div class="card-cover" style="${coverStyle(it, it.title)}"><span class="cover-title">${esc(coverText(it.title))}</span></div>
+              <div class="card-body">
+                <h3>${esc(it.title)}</h3>
+                <p>${esc(it.summary)}</p>
+                <div class="card-meta">
+                  <span>${esc(Array.isArray(it.category) ? it.category.join("、") : (it.category || "未分类"))}</span>
+                  ${it.author ? `<span>${esc(it.author)}</span>` : ""}
+                </div>
+              </div>
+            </a>`).join("")
+          : `<div class="state">暂无作品，期待你的投稿</div>`;
+      } catch (e) {
+        console.warn(e);
+        document.querySelector("#works").innerHTML =
+          `<div class="state">作品加载失败，请检查网络后重试。<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+      }
+    })();
+  </script>
+</body>
+</html>

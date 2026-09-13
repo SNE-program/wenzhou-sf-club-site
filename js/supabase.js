@@ -1,0 +1,253 @@
+// ============================================
+// Supabase 轻量客户端（fetch 直连，零外部依赖）
+// 用途：登录/注册 + 评论/表态/举报 数据读写
+// 说明：anon key 是公开密钥，前端使用安全
+// ============================================
+
+const SB = {
+  url: "https://edfxoxcvprjzbemojshr.supabase.co",
+  anon: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkZnhveGN2cHJqemJlbW9qc2hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTAzMDgsImV4cCI6MjEwMTUyNjMwOH0.ytkYFmJyYb00yBtYsxPE6Sh3HVmwrJfn2HuerFiV42U",
+  TOKEN_KEY: "sb_token",
+  REFRESH_KEY: "sb_refresh",
+  USER_KEY: "sb_user",
+
+  // 会话
+  _refreshing: null, // 单飞：并发 401 时共享同一次续期，避免刷新令牌轮换竞态
+  token() {
+    return localStorage.getItem(this.TOKEN_KEY);
+  },
+  user() {
+    try {
+      return JSON.parse(localStorage.getItem(this.USER_KEY));
+    } catch {
+      return null;
+    }
+  },
+  saveSession(data) {
+    if (data && data.access_token) {
+      localStorage.setItem(this.TOKEN_KEY, data.access_token);
+      if (data.refresh_token) localStorage.setItem(this.REFRESH_KEY, data.refresh_token);
+      if (data.user) localStorage.setItem(this.USER_KEY, JSON.stringify(data.user));
+    }
+  },
+  clearSession() {
+    localStorage.removeItem(this.TOKEN_KEY);
+    localStorage.removeItem(this.REFRESH_KEY);
+    localStorage.removeItem(this.USER_KEY);
+    // 通知界面（auth.js）将登录态切回未登录
+    window.dispatchEvent(new CustomEvent("sb-auth-changed"));
+  },
+  // 用 refresh_token 换新 access_token；成功返回 true。
+  // 网络异常（离线/中断 ERR_ABORTED/超时）返回 false 但保留会话，避免误登出；
+  // 仅当服务端明确拒绝（令牌失效）才清除会话。
+  async refresh() {
+    const rt = localStorage.getItem(this.REFRESH_KEY);
+    if (!rt) return false;
+    if (this._refreshing) return this._refreshing;
+    this._refreshing = (async () => {
+      let res;
+      try {
+        res = await fetch(this.url + "/auth/v1/token?grant_type=refresh_token", {
+          method: "POST",
+          headers: { apikey: this.anon, "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: rt }),
+          signal: "timeout" in AbortSignal ? AbortSignal.timeout(12000) : undefined,
+        });
+      } catch (e) {
+        // 网络层中断（ERR_ABORTED / 离线 / 代理重置等）：不销毁会话，让调用方提示重试
+        return false;
+      }
+      let data = null;
+      try {
+        data = await res.json();
+      } catch (e) {
+        /* 非 JSON 响应按失败处理 */
+      }
+      if (res.ok && data && data.access_token) {
+        this.saveSession(data);
+        return true;
+      }
+      // 明确失败（401/400 等，刷新令牌无效或已撤销）：清除会话
+      this.clearSession();
+      return false;
+    })().finally(() => {
+      this._refreshing = null;
+    });
+    return this._refreshing;
+  },
+
+  // 基础请求（isRetry 用于 JWT 过期续期后重试，防止无限循环）
+  async request(path, opts = {}, isRetry = false) {
+    const headers = { apikey: this.anon, ...(opts.headers || {}) };
+    const token = this.token();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (opts.body !== undefined && !headers["Content-Type"]) {
+      headers["Content-Type"] = "application/json";
+    }
+    let res;
+    try {
+      res = await fetch(this.url + path, { ...opts, headers });
+    } catch (e) {
+      throw new Error("网络异常，请检查网络后重试");
+    }
+    let text = "";
+    try {
+      text = await res.text();
+    } catch (e) {
+      /* 忽略读取失败 */
+    }
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch (e) {
+      data = null;
+    }
+    if (!res.ok) {
+      // 401（token 过期/被撤销/无效）：自动用 refresh_token 续期后重试一次
+      if (!isRetry && res.status === 401) {
+        const refreshed = await this.refresh();
+        if (refreshed) return this.request(path, opts, true);
+        // 刷新成功但原请求已过期（并发续期）：重试；刷新因网络失败未登出 → 提示网络
+        if (this.token()) throw new Error("网络异常，请检查网络后重试");
+        throw new Error("登录已过期，请重新登录");
+      }
+      throw new Error((data && (data.msg || data.message || data.error_description)) || `请求失败 ${res.status}`);
+    }
+    return data;
+  },
+
+  // ---- Auth ----
+  // extra：可选的附加 user_metadata（如 { student_id, real_name }，供实名名册自动核验）
+  async signUp(email, password, nickname, extra = {}) {
+    // redirect_to：让验证邮件里的链接跳回当前站点（线上/本地测试均正确）。
+    // 需在控制台 Authentication→URL Configuration 的 Additional Redirect URLs 放行本地测试地址。
+    const redirect_to = location.origin + location.pathname;
+    const data = await this.request("/auth/v1/signup", {
+      method: "POST",
+      body: JSON.stringify({ email, password, data: { nickname, ...extra }, redirect_to }),
+    });
+    if (data.session) {
+      this.saveSession(data.session);
+      // 通知界面（submit.html 等）从“未登录”切换到“已登录”
+      window.dispatchEvent(new CustomEvent("sb-auth-changed"));
+    }
+    return data;
+  },
+  async signIn(email, password) {
+    const data = await this.request("/auth/v1/token?grant_type=password", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    this.saveSession(data);
+    window.dispatchEvent(new CustomEvent("sb-auth-changed"));
+    return data;
+  },
+  async signOut() {
+    try {
+      await this.request("/auth/v1/logout", { method: "POST" });
+    } catch (e) {
+      /* 忽略登出网络错误 */
+    }
+    this.clearSession();
+  },
+  // 发送密码重置邮件（GoTrue /auth/v1/recover）
+  async recover(email) {
+    const redirect_to = location.origin + location.pathname;
+    return this.request("/auth/v1/recover", {
+      method: "POST",
+      body: JSON.stringify({ email, redirect_to }),
+    });
+  },
+
+  // 处理邮箱验证 / 密码重置链接跳回本页时的 token（URL hash 片段）：
+  // 解析 → 校验会话 → 保存登录态 → 清理地址栏，返回 { type, error, loggedIn } 供页面提示。
+  async handleAuthRedirect() {
+    if (!location.hash || !location.hash.startsWith("#")) return null;
+    const params = new URLSearchParams(location.hash.slice(1));
+    const type = params.get("type");
+    const error = params.get("error");
+    const access_token = params.get("access_token");
+    const refresh_token = params.get("refresh_token");
+    // 仅当出现认证相关参数时才接管，避免误清其他页面锚点
+    if (!error && !access_token && !type) return null;
+
+    // 先清理地址栏，避免 token 残留
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+
+    if (error) return { type, error: params.get("error_description") || error, loggedIn: false };
+    if (!access_token) return { type, error: null, loggedIn: false };
+
+    // 用 token 换取用户信息以校验有效性；失败（过期/无效/网络异常）则不保存会话
+    let user = null;
+    try {
+      const res = await fetch(this.url + "/auth/v1/user", {
+        headers: { apikey: this.anon, Authorization: `Bearer ${access_token}` },
+      });
+      if (res.ok) user = await res.json();
+    } catch (e) { /* 按无效处理 */ }
+    if (!user) {
+      return { type, error: "验证链接已失效或过期，请重新发送验证邮件", loggedIn: false };
+    }
+
+    this.saveSession({ access_token, refresh_token, user });
+    window.dispatchEvent(new CustomEvent("sb-auth-changed"));
+    return { type, error: null, loggedIn: true };
+  },
+
+  // ---- Storage（文件上传，需登录；用于投稿封面/附件）----
+  BUCKET: "uploads",
+  publicUrl(path) {
+    return `${this.url}/storage/v1/object/public/${this.BUCKET}/${path}`;
+  },
+  // 上传文件到公开 bucket，返回公开 URL。内部处理 401 续期重试。
+  async uploadFile(path, file, isRetry = false) {
+    const token = this.token();
+    if (!token) throw new Error("请先登录");
+    const res = await fetch(`${this.url}/storage/v1/object/${this.BUCKET}/${path}`, {
+      method: "POST",
+      headers: {
+        apikey: this.anon,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": file.type || "application/octet-stream",
+        "x-upsert": "false",
+      },
+      body: file,
+    });
+    if (res.status === 401 && !isRetry) {
+      const refreshed = await this.refresh();
+      if (refreshed) return this.uploadFile(path, file, true);
+      throw new Error("登录已过期，请重新登录");
+    }
+    if (!res.ok) {
+      let msg = `上传失败 ${res.status}`;
+      try {
+        const j = await res.json();
+        if (j.message) msg = j.message;
+      } catch (e) {}
+      throw new Error(msg);
+    }
+    return this.publicUrl(path);
+  },
+
+  // ---- 数据（PostgREST）----
+  get(table, query) {
+    return this.request(`/rest/v1/${table}?${query}`);
+  },
+  insert(table, body) {
+    return this.request(`/rest/v1/${table}`, { method: "POST", body: JSON.stringify(body) });
+  },
+  update(table, body, query) {
+    return this.request(`/rest/v1/${table}?${query}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+      headers: { Prefer: "return=representation" },
+    });
+  },
+  remove(table, query) {
+    return this.request(`/rest/v1/${table}?${query}`, { method: "DELETE" });
+  },
+  // 调用数据库 RPC 函数（如 admin_delete_user / admin_set_banned）
+  rpc(fn, body) {
+    return this.request(`/rest/v1/rpc/${fn}`, { method: "POST", body: JSON.stringify(body || {}) });
+  },
+};
