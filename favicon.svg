@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#0d1220"/>
+  <circle cx="32" cy="32" r="26" fill="none" stroke="#e6b14e" stroke-width="2.5"/>
+  <ellipse cx="32" cy="32" rx="26" ry="10" fill="none" stroke="#e6b14e" stroke-width="1" opacity="0.55" transform="rotate(-24 32 32)"/>
+  <ellipse cx="32" cy="32" rx="10" ry="26" fill="none" stroke="#3fd8c5" stroke-width="1" opacity="0.8" transform="rotate(24 32 32)"/>
+  <circle cx="32" cy="32" r="4" fill="#ffd166"/>
+  <text x="32" y="41" font-family="'Noto Serif SC','Songti SC','SimSun',serif" font-size="26" fill="#ffd166" text-anchor="middle">幻</text>
+</svg>
