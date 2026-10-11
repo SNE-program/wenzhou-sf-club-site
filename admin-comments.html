@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>评论管理 · 温州中学科学及幻想文学社</title>
+  <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+  <link rel="stylesheet" href="css/admin.css?v=3">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>评论管理</h1>
+      <div class="sub">按文章查看评论，可删除（隐藏，不可恢复）或拉黑违规用户。</div>
+    </div>
+    <div id="admin-nav"></div>
+
+    <div class="c-toolbar" id="toolbar" hidden>
+      <div class="c-grid ac-filter">
+        <label class="c-field">文章
+          <select id="f-article"><option value="">全部</option></select>
+        </label>
+        <label class="c-field">状态
+          <select id="f-status">
+            <option value="">全部</option>
+            <option value="active">正常</option>
+            <option value="deleted">已删除</option>
+          </select>
+        </label>
+        <label class="c-field">昵称关键词
+          <input id="f-nick" type="search" placeholder="输入昵称筛选…" autocomplete="off">
+        </label>
+      </div>
+    </div>
+    <div id="admin-root">
+      <div class="state"><div class="spinner"></div>正在加载……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=10"></script>
+  <script src="js/api.js?v=7"></script>
+  <script src="js/supabase.js?v=9"></script>
+  <script src="js/auth.js?v=16"></script>
+  <script src="js/admin.js?v=4"></script>
+  <script>
+    function timeLabel(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+    function preview(text, n) {
+      const s = String(text || "").replace(/\s+/g, " ").trim();
+      return s.length > n ? s.slice(0, n) + "…" : s;
+    }
+
+    (async function () {
+      const root = document.getElementById("admin-root");
+      const user = SB.user();
+      if (!user) {
+        root.innerHTML = `<div class="state"><p>请先登录管理员账号</p><p style="margin-top:1rem"><button class="btn" id="go-login" type="button">登录</button></p></div>`;
+        document.getElementById("go-login").addEventListener("click", () => window.openAuthModal("login"));
+        return;
+      }
+      const me = await window.getMyProfile();
+      if (!me || !me.is_admin) {
+        root.innerHTML = `<div class="state">你没有管理权限。</div>`;
+        return;
+      }
+      const stats = await window.loadTodoStats();
+      window.adminNav("admin-comments.html", stats);
+
+      // 文章标题映射
+      let articleMap = {};
+      try {
+        const [works, acts] = await Promise.all([fetchSection("works"), fetchSection("activities")]);
+        [...works, ...acts].forEach((it) => { articleMap[it.id] = { title: it.title, type: it.category ? "works" : "activities" }; });
+      } catch (e) { /* 不阻塞 */ }
+
+      let comments = [];
+      let profilesById = {};
+      let curArticle = "";
+      let curStatus = "";
+      let curNick = "";
+
+      async function load() {
+        comments = await SB.get("comments", "select=*&order=created_at.desc&limit=500");
+        const uids = [...new Set(comments.map((c) => c.user_id))];
+        profilesById = {};
+        if (uids.length) {
+          const ps = await SB.get("profiles", `user_id=in.(${uids.join(",")})&select=user_id,nickname,status`);
+          ps.forEach((p) => (profilesById[p.user_id] = p));
+        }
+        // 文章下拉
+        const sel = document.getElementById("f-article");
+        const opts = Object.entries(articleMap).sort((a, b) => a[1].title.localeCompare(b[1].title));
+        sel.innerHTML = `<option value="">全部</option>` + opts.map(([id, v]) => `<option value="${esc(id)}">${esc(v.title)}</option>`).join("");
+        document.getElementById("toolbar").hidden = false;
+      }
+
+      function filtered() {
+        return comments.filter((c) => {
+          if (curStatus && c.status !== curStatus) return false;
+          if (curArticle && c.article_id !== curArticle) return false;
+          if (curNick) {
+            const nick = (profilesById[c.user_id] || {}).nickname || "";
+            if (!nick.toLowerCase().includes(curNick.toLowerCase())) return false;
+          }
+          return true;
+        });
+      }
+
+      function render() {
+        const list = filtered();
+        if (!list.length) {
+          root.innerHTML = `<div class="state">没有符合条件的评论。</div>`;
+          return;
+        }
+        root.innerHTML = `
+          <div class="a-count">共 <b>${list.length}</b> 条（全部评论 ${comments.length} 条）</div>
+          ${list.map((c) => {
+            const p = profilesById[c.user_id] || {};
+            const art = articleMap[c.article_id];
+            const banned = p.status === "rejected";
+            return `
+            <div class="a-card comment-row" data-id="${c.id}" data-uid="${c.user_id}">
+              <div class="a-card-main">
+                <div class="a-card-title">${esc(p.nickname || "（用户）")}
+                  ${banned ? `<span class="status-badge">已拉黑</span>` : (p.status === "pending" ? `<span class="status-badge">待审核</span>` : "")}
+                </div>
+                <div class="a-card-meta">
+                  <span>${esc(timeLabel(c.created_at))}</span>
+                  ${c.edited_at ? `<span>已编辑</span>` : ""}
+                  ${art ? `<a class="meta-link" href="articles/${encodeURIComponent(c.article_id)}.html" target="_blank">📄 ${esc(art.title)}</a>` : `<span>文章 ${esc(c.article_id)}</span>`}
+                </div>
+                <div class="a-card-text">${esc(preview(c.content, 120))}</div>
+              </div>
+              <div class="a-card-actions">
+                ${c.status === "active"
+                  ? `<button class="a-btn warn" data-act="hide" type="button">删除</button>`
+                  : `<span class="a-count">已删除</span>`}
+                ${!banned && c.user_id !== me.user_id ? `<button class="a-btn danger" data-act="ban" type="button">拉黑</button>` : ""}
+              </div>
+            </div>`;
+          }).join("")}`;
+        root.querySelectorAll(".comment-row").forEach((row) => {
+          const id = row.dataset.id;
+          const uid = row.dataset.uid;
+          row.querySelectorAll("[data-act]").forEach((btn) => {
+            btn.addEventListener("click", () => handle(id, uid, btn.dataset.act, row));
+          });
+        });
+      }
+
+      async function handle(id, uid, act, row) {
+        const nick = (profilesById[uid] || {}).nickname || "该用户";
+        if (act === "hide") {
+          const ok = await window.adminConfirm({
+            title: "删除（隐藏）这条评论？",
+            message: "评论将不再显示（不可恢复），用户本身不受影响。",
+            danger: true,
+            okText: "删除",
+          });
+          if (!ok) return;
+        } else if (act === "ban") {
+          const ok = await window.adminConfirm({
+            title: `拉黑「${nick}」？`,
+            message: "其评论将全部隐藏，且无法再评论、表态、举报。",
+            danger: true,
+            okText: "拉黑",
+          });
+          if (!ok) return;
+        }
+        row.querySelectorAll("button").forEach((b) => (b.disabled = true));
+        try {
+          if (act === "hide") {
+            await SB.update("comments", { status: "deleted" }, `id=eq.${id}`);
+          } else if (act === "ban") {
+            await SB.update("profiles", { status: "rejected" }, `user_id=eq.${uid}`);
+            await SB.update("comments", { status: "deleted" }, `user_id=eq.${uid}&status=eq.active`);
+            const uids = await SB.get("comments", `user_id=eq.${uid}&select=id`);
+            const cids = uids.map((x) => x.id);
+            const idParts = [`user_id=eq.${uid}`];
+            if (cids.length) idParts.push(`comment_id=in.(${cids.join(",")})`);
+            await SB.update("reports", { status: "resolved" }, idParts.join("&") + "&status=eq.pending");
+          }
+          // 重新加载（拉黑会连带删除多条评论）
+          try { await load(); } catch (e) { /* 保留旧数据 */ }
+          render();
+          const s2 = await window.loadTodoStats();
+          window.adminNav("admin-comments.html", s2);
+        } catch (e) {
+          alert("操作失败：" + e.message);
+          row.querySelectorAll("button").forEach((b) => (b.disabled = false));
+        }
+      }
+
+      document.getElementById("f-article").addEventListener("change", (e) => { curArticle = e.target.value; render(); });
+      document.getElementById("f-status").addEventListener("change", (e) => { curStatus = e.target.value; render(); });
+      document.getElementById("f-nick").addEventListener("input", (e) => { curNick = e.target.value.trim(); render(); });
+
+      try {
+        await load();
+        render();
+      } catch (e) {
+        root.innerHTML = `<div class="state">加载失败：${esc(e.message)}<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+      }
+    })();
+  </script>
+</body>
+</html>
