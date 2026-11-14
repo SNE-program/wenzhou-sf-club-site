@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>竞赛管理 · 温州中学科学及幻想文学社</title>
+  <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+  <link rel="stylesheet" href="css/admin.css?v=3">
+  <!-- Word 告示转 Markdown（本地 vendor，仅用到「转换为 Markdown」时加载） -->
+  <script src="js/vendor/mammoth.min.js"></script>
+  <script src="js/vendor/turndown.min.js"></script>
+  <style>
+    .file-pick { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.4rem; }
+    .file-btn { margin: 0; }
+    .c-fname { font-size: 0.85rem; color: var(--text-dim); word-break: break-all; }
+    .c-hint { display: block; font-size: 0.8rem; color: var(--text-dim); margin-top: 0.45rem; }
+  </style>
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>竞赛管理</h1>
+      <div class="sub">在线编辑竞赛信息，保存后网站立即更新。内容会写入网站数据库，替代 Notion 竞赛页。</div>
+    </div>
+    <div id="admin-nav"></div>
+
+    <div id="admin-root">
+      <div class="state"><div class="spinner"></div>正在加载……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=10"></script>
+  <script src="js/api.js?v=7"></script>
+  <script src="js/supabase.js?v=9"></script>
+  <script src="js/auth.js?v=16"></script>
+  <script src="js/admin.js?v=4"></script>
+  <script>
+    // 登录/登出后整页重建（表单依赖登录态，避免停留在未登录占位页）
+    window.addEventListener("sb-auth-changed", () => location.reload());
+
+    (async function () {
+      const root = document.getElementById("admin-root");
+      const user = SB.user();
+      if (!user) {
+        root.innerHTML = `<div class="state"><p>请先登录管理员账号</p><p style="margin-top:1rem"><button class="btn" id="go-login" type="button">登录</button></p></div>`;
+        document.getElementById("go-login").addEventListener("click", () => window.openAuthModal("login"));
+        return;
+      }
+      const me = await window.getMyProfile();
+      if (!me || !me.is_admin) {
+        root.innerHTML = `<div class="state">你没有管理权限。</div>`;
+        return;
+      }
+      const stats = await window.loadTodoStats();
+      window.adminNav("admin-contests.html", stats);
+
+      let rows = [];
+      try {
+        rows = await SB.get("contests", "select=*&order=sort_order.asc");
+      } catch (e) {
+        root.innerHTML = `<div class="state">加载失败：${esc(e.message)}<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+        return;
+      }
+
+      // 表单模板（编辑模式带 id）
+      function formHTML(item) {
+        const v = (k) => (item ? item[k] ?? "" : "");
+        return `
+          <div class="contest-form">
+            <form id="contest-form">
+              <input type="hidden" name="id" value="${item ? item.id : ""}">
+              <div class="c-grid">
+                <label class="c-field span2">标题 *<input name="title" required value="${esc(v("title"))}" placeholder="如：第一届「星际信使」科幻征文大赛"></label>
+                <label class="c-field">状态
+                  <select name="status">
+                    ${["报名中", "评审中", "已结束"].map((s) => `<option value="${s}"${v("status") === s ? " selected" : ""}>${s}</option>`).join("")}
+                  </select>
+                </label>
+                <label class="c-field">投稿截止<input type="date" name="deadline" value="${esc(v("deadline") || "")}"></label>
+                <label class="c-field">排序<input type="number" name="sort_order" value="${v("sort_order") ?? 0}" step="1"></label>
+              </div>
+              <label class="c-field">主题<textarea name="topic" rows="2">${esc(v("topic"))}</textarea></label>
+              <label class="c-field">参赛规则（告示内容）<textarea name="rules" id="c-rules" rows="6">${esc(v("rules"))}</textarea>
+                <input type="hidden" name="rules_html" id="c-rules-html" value="${esc(v("rules_html"))}">
+              </label>
+              <label class="c-field">奖项设置<textarea name="awards" rows="2">${esc(v("awards"))}</textarea></label>
+              <label class="c-field">获奖名单<textarea name="winners" rows="2">${esc(v("winners"))}</textarea></label>
+              <div class="c-field">
+                <span style="display:block;margin-bottom:0.1rem">告示附件（Word）</span>
+                <div class="file-pick">
+                  <label class="a-btn ghost file-btn" for="c-attach">选择 Word 告示</label>
+                  <input type="file" id="c-attach" accept=".docx,.docm" hidden>
+                  <span class="c-fname" id="c-attach-name">${item && item.attachment_name ? esc(item.attachment_name) : "未选择文件"}</span>
+                </div>
+                <button class="a-btn ghost" type="button" id="c-to-md" style="margin-top:0.5rem">转换为 Markdown</button>
+                <span class="c-hint" id="c-attach-hint">可选。上传 Word 告示（.docx / .docm），保存后会在竞赛页提供下载；点「转换为 Markdown」可把正文识别到上方「参赛规则」。</span>
+              </div>
+              <div class="c-actions">
+                <button class="a-btn" type="submit">${item ? "保存修改" : "创建竞赛"}</button>
+                <button class="a-btn ghost" type="button" id="form-cancel">取消</button>
+              </div>
+            </form>
+          </div>`;
+      }
+
+      function render() {
+        root.innerHTML = `
+          <div class="c-toolbar">
+            <span class="a-count" style="margin:0">共 <b>${rows.length}</b> 场竞赛</span>
+            <button class="a-btn" id="btn-new" type="button">＋ 新建竞赛</button>
+          </div>
+          <div id="form-wrap" hidden></div>
+          <div id="contest-list">
+            ${rows.length
+              ? rows.map((c) => `
+                <div class="a-card" data-id="${c.id}">
+                  <div class="a-card-main">
+                    <div class="a-card-title">${esc(c.title)} <span class="status-badge s-${esc(c.status)}">${esc(c.status)}</span></div>
+                    <div class="a-card-meta">
+                      ${c.deadline ? `<span>截止 ${esc(c.deadline)}</span>` : `<span>截止 未定</span>`}
+                      ${c.sort_order ? `<span>排序 ${c.sort_order}</span>` : ""}
+                      ${c.topic ? `<span>${esc(String(c.topic).slice(0, 60))}</span>` : ""}
+                    </div>
+                  </div>
+                  <div class="a-card-actions">
+                    <button class="a-btn" type="button" data-act="edit">编辑</button>
+                    <button class="a-btn danger" type="button" data-act="del">删除</button>
+                  </div>
+                </div>`).join("")
+              : `<div class="state">还没有竞赛，点「新建竞赛」创建第一场。</div>`}
+          </div>`;
+
+        document.getElementById("btn-new").addEventListener("click", () => {
+          const wrap = document.getElementById("form-wrap");
+          wrap.hidden = false;
+          wrap.innerHTML = formHTML(null);
+          bindForm();
+          wrap.scrollIntoView({ behavior: "smooth" });
+        });
+
+        document.querySelectorAll("#contest-list .a-card").forEach((item) => {
+          const id = item.dataset.id;
+          const c = rows.find((r) => r.id === id);
+          item.querySelector('[data-act="edit"]').addEventListener("click", () => {
+            const wrap = document.getElementById("form-wrap");
+            wrap.hidden = false;
+            wrap.innerHTML = formHTML(c);
+            bindForm();
+            wrap.scrollIntoView({ behavior: "smooth" });
+          });
+          item.querySelector('[data-act="del"]').addEventListener("click", async () => {
+            const ok = await window.adminConfirm({
+              title: `确认删除「${c.title}」？`,
+              message: "此操作不可恢复。",
+              danger: true,
+              okText: "删除",
+            });
+            if (!ok) return;
+            item.querySelectorAll("button").forEach((b) => (b.disabled = true));
+            try {
+              await SB.remove("contests", `id=eq.${id}`);
+              rows = rows.filter((r) => r.id !== id);
+              render();
+            } catch (e) {
+              alert("删除失败：" + e.message);
+              item.querySelectorAll("button").forEach((b) => (b.disabled = false));
+            }
+          });
+        });
+      }
+
+      async function bindForm() {
+        const form = document.getElementById("contest-form");
+        const cancel = document.getElementById("form-cancel");
+        const MAX_FILE = 10 * 1024 * 1024; // 10MB
+
+        cancel.addEventListener("click", () => {
+          document.getElementById("form-wrap").hidden = true;
+        });
+
+        // 告示附件：选中即显示文件名
+        const attachInput = document.getElementById("c-attach");
+        const attachNameEl = document.getElementById("c-attach-name");
+        if (attachInput) {
+          attachInput.addEventListener("change", () => {
+            const f = attachInput.files[0];
+            if (!f) { attachNameEl.textContent = "未选择文件"; return; }
+            if (f.size > MAX_FILE) { attachNameEl.textContent = "文件超过 10MB，请压缩后重试"; return; }
+            attachNameEl.textContent = `${f.name}（${(f.size / 1024 / 1024).toFixed(1)}MB）`;
+          });
+
+          // Word 告示 → Markdown：mammoth(Word→HTML) + turndown(HTML→Markdown)，纯浏览器本地完成
+          const toMd = document.getElementById("c-to-md");
+          const hintEl = document.getElementById("c-attach-hint");
+          toMd.addEventListener("click", async () => {
+            const f = attachInput.files[0];
+            if (!f) { hintEl.textContent = "请先选择 Word 告示文件"; return; }
+            if (!/\.(docx|docm)$/i.test(f.name)) { hintEl.textContent = "仅支持 .docx / .docm 格式，请重新选择附件"; return; }
+            if (typeof window.mammoth !== "object" || typeof window.TurndownService !== "function") {
+              hintEl.textContent = "转换组件加载失败，请刷新页面重试";
+              return;
+            }
+            toMd.disabled = true;
+            toMd.textContent = "转换中…";
+            try {
+              const arrayBuffer = await f.arrayBuffer();
+              const { value: html } = await window.mammoth.convertToHtml({ arrayBuffer });
+              const md = new window.TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" }).turndown(html);
+              if (!md.trim()) throw new Error("未识别到文字内容");
+              const rulesEl = document.getElementById("c-rules");
+              const rulesHtmlEl = document.getElementById("c-rules-html");
+              rulesEl.value = md.trim() + "\n";
+              if (rulesHtmlEl) rulesHtmlEl.value = html; // 保留 Word 原始排版（表格/对齐/颜色）
+              hintEl.textContent = `已导入《${f.name}》：Markdown 已写入「参赛规则」，并保留了 Word 原始排版（表格、对齐、字体颜色）。`;
+            } catch (err) {
+              hintEl.textContent = "转换失败：" + (err.message || "未知错误") + "。也可直接复制文本粘贴到「参赛规则」。";
+            } finally {
+              toMd.disabled = false;
+              toMd.textContent = "转换为 Markdown";
+            }
+          });
+        }
+
+        // 手动编辑「参赛规则」后清除 Word 排版版本（以 Markdown 排版为准，避免展示过期 HTML）
+        const rulesText = document.getElementById("c-rules");
+        const rulesHtmlEl = document.getElementById("c-rules-html");
+        if (rulesText && rulesHtmlEl) {
+          rulesText.addEventListener("input", () => {
+            if (rulesHtmlEl.value) rulesHtmlEl.value = "";
+          });
+        }
+
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const fd = new FormData(form);
+          const id = fd.get("id");
+          const body = {
+            title: fd.get("title").trim(),
+            status: fd.get("status"),
+            deadline: fd.get("deadline") || null,
+            sort_order: Number(fd.get("sort_order")) || 0,
+            topic: fd.get("topic").trim(),
+            rules: fd.get("rules").trim(),
+            rules_html: fd.get("rules_html") || "",
+            awards: fd.get("awards").trim(),
+            winners: fd.get("winners").trim(),
+          };
+          if (!body.title) return;
+          const btn = form.querySelector("button[type=submit]");
+
+          // 新选了告示附件 → 先上传到 Storage（公开），再随竞赛信息保存
+          const attachFile = attachInput && attachInput.files[0];
+          if (attachFile) {
+            if (attachFile.size > MAX_FILE) { alert("告示附件超过 10MB，请压缩后重试"); return; }
+            btn.disabled = true;
+            btn.textContent = "上传告示附件…";
+            try {
+              const uid = (SB.user() || {}).id || "admin";
+              const safe = String(attachFile.name || "notice")
+                .replace(/[\\/:*?"<>|#%&{}$!'@+`=]/g, "_")
+                .replace(/[^\x00-\x7F]/g, "_")
+                .replace(/_+/g, "_")
+                .replace(/^_|_$/g, "")
+                .slice(0, 60) || "notice";
+              const path = `contests/${uid}/${Date.now()}_${safe}`;
+              body.attachment_url = await SB.uploadFile(path, attachFile);
+              body.attachment_name = attachFile.name;
+            } catch (err) {
+              alert("上传告示附件失败：" + err.message);
+              btn.disabled = false;
+              btn.textContent = id ? "保存修改" : "创建竞赛";
+              return;
+            }
+          }
+
+          btn.disabled = true;
+          btn.textContent = "保存中…";
+          try {
+            if (id) {
+              await SB.update("contests", body, `id=eq.${id}`);
+            } else {
+              await SB.insert("contests", body);
+            }
+            rows = await SB.get("contests", "select=*&order=sort_order.asc");
+            render();
+          } catch (err) {
+            alert("保存失败：" + err.message);
+            btn.disabled = false;
+            btn.textContent = id ? "保存修改" : "创建竞赛";
+          }
+        });
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>
