@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理后台 · 温州中学科学及幻想文学社</title>
+  <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+  <link rel="stylesheet" href="css/admin.css?v=3">
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>管理后台</h1>
+      <div class="sub">待办事项一目了然，点击直达处理；新用户需完成邮箱验证，并经管理员审核通过后才能评论、表态、举报。</div>
+    </div>
+    <div id="admin-nav"></div>
+
+    <div id="todo-dash"><div class="state"><div class="spinner"></div>正在统计待办……</div></div>
+
+    <div class="a-links">
+      <a class="a-link" href="admin-works.html">作品管理</a>
+      <a class="a-link" href="admin-comments.html">评论管理</a>
+      <a class="a-link" href="admin-contests.html">竞赛管理</a>
+      <a class="a-link" href="admin-users.html">人员管理</a>
+    </div>
+
+    <div id="admin-root">
+      <div class="state"><div class="spinner"></div>正在加载……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=10"></script>
+  <script src="js/api.js?v=7"></script>
+  <script src="js/supabase.js?v=9"></script>
+  <script src="js/auth.js?v=16"></script>
+  <script src="js/admin.js?v=4"></script>
+  <script>
+    const FUNC_URL = "https://edfxoxcvprjzbemojshr.supabase.co/functions/v1/send-audit-email";
+
+    function timeLabel(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    (async function () {
+      const root = document.getElementById("admin-root");
+      const dash = document.getElementById("todo-dash");
+      const user = SB.user();
+      if (!user) {
+        root.innerHTML = `<div class="state"><p>请先登录管理员账号</p><p style="margin-top:1rem"><button class="btn" id="go-login" type="button">登录</button></p></div>`;
+        dash.hidden = true;
+        document.getElementById("go-login").addEventListener("click", () => window.openAuthModal("login"));
+        return;
+      }
+      const me = await window.getMyProfile();
+      if (!me || !me.is_admin) {
+        root.innerHTML = `<div class="state">你没有管理权限。</div>`;
+        dash.hidden = true;
+        return;
+      }
+
+      // 待办统计（投稿 / 举报 / 入站）
+      const stats = await window.loadTodoStats();
+      window.adminNav("admin.html", stats);
+
+      function dashCard(href, num, label, sub, zeroSub) {
+        return `
+          <a class="a-dash-card" href="${href}">
+            <div class="a-dash-num${num ? "" : " zero"}">${num}</div>
+            <div>
+              <div class="a-dash-label">${label}</div>
+              <div class="a-dash-sub">${num ? sub : zeroSub}</div>
+            </div>
+          </a>`;
+      }
+      dash.innerHTML = `
+        <div class="a-dash">
+          ${dashCard("admin-submissions.html", stats.submissions, "投稿待审", "点击进入投稿审核", "暂无待审投稿")}
+          ${dashCard("admin-reports.html", stats.reports, "举报待处理", "点击进入举报处理", "暂无待处理举报")}
+          ${dashCard("#pending", stats.users, "入站待审", "点击直达下方待审列表", "暂无待审用户")}
+        </div>`;
+
+      // 待入站审核用户列表
+      let rows = [];
+      try {
+        rows = await SB.get(
+          "profiles",
+          "status=eq.pending&select=user_id,nickname,email,created_at&order=created_at.asc"
+        );
+      } catch (e) {
+        root.innerHTML = `<div class="state">加载失败：${esc(e.message)}<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+        return;
+      }
+
+      function renderList() {
+        root.innerHTML = `
+          <div class="a-sec-title" id="pending">待入站审核${rows.length ? ` <span class="a-badge">${rows.length}</span>` : ""}</div>
+          ${rows.length
+            ? rows.map((u) => `
+              <div class="a-card" data-uid="${u.user_id}">
+                <div class="a-card-main">
+                  <div class="a-card-title">${esc(u.nickname || "（无昵称）")}</div>
+                  <div class="a-card-meta">
+                    <span>${esc(u.email || "")}</span>
+                    <span>注册于 ${esc(timeLabel(u.created_at))}</span>
+                  </div>
+                </div>
+                <div class="a-card-actions">
+                  <button class="a-btn" data-act="pass" type="button">通过</button>
+                  <button class="a-btn danger" data-act="reject" type="button">拒绝</button>
+                </div>
+              </div>`).join("")
+            : `<div class="state">当前没有待审核的用户。</div>`}`;
+        root.querySelectorAll(".a-card").forEach((item) => {
+          const uid = item.dataset.uid;
+          item.querySelector('[data-act="pass"]').addEventListener("click", () => setStatus(uid, "approved", item));
+          item.querySelector('[data-act="reject"]').addEventListener("click", () => setStatus(uid, "rejected", item));
+        });
+      }
+
+      async function setStatus(uid, status, item) {
+        const u = rows.find((r) => r.user_id === uid);
+        const act = status === "approved" ? "通过" : "拒绝";
+        const ok = await window.adminConfirm({
+          title: `确认${act}入站申请？`,
+          message: `用户：${u.nickname || u.email}（${u.email || ""}）\n${status === "rejected" ? "拒绝后该用户将无法评论、表态、举报。" : "通过后即可正常使用评论、表态、举报功能。"}`,
+          danger: status === "rejected",
+          okText: act,
+        });
+        if (!ok) return;
+        const btns = item.querySelectorAll("button");
+        btns.forEach((b) => (b.disabled = true));
+        try {
+          await SB.update("profiles", { status }, `user_id=eq.${uid}`);
+          // 邮件通知（Edge Function，尽力而为；未部署/未配置 SMTP 时静默降级）
+          let mailNote = "";
+          try {
+            const r = await fetch(FUNC_URL, {
+              method: "POST",
+              headers: {
+                apikey: SB.anon,
+                Authorization: "Bearer " + SB.token(),
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ email: u.email, nickname: u.nickname, status }),
+            });
+            if (!r.ok) mailNote = "（邮件服务未配置，通知未发送）";
+          } catch (e) {
+            mailNote = "（邮件服务未配置，通知未发送）";
+          }
+          rows = rows.filter((r) => r.user_id !== uid);
+          if (!rows.length) {
+            root.innerHTML = `<div class="a-sec-title" id="pending">待入站审核</div><div class="state">已处理完毕，当前没有待审核用户。</div>`;
+          } else {
+            renderList();
+            const note = document.createElement("p");
+            note.className = "a-count";
+            note.textContent = `已将「${u.nickname || u.email}」标记为${act}${mailNote}`;
+            root.insertAdjacentElement("afterbegin", note);
+          }
+          // 刷新待办仪表盘
+          const s2 = await window.loadTodoStats();
+          window.adminNav("admin.html", s2);
+          const numEl = dash.querySelector('.a-dash-card[href="#pending"] .a-dash-num');
+          if (numEl) { numEl.textContent = s2.users; numEl.classList.toggle("zero", !s2.users); }
+        } catch (e) {
+          alert("操作失败：" + e.message);
+          btns.forEach((b) => (b.disabled = false));
+        }
+      }
+
+      renderList();
+    })();
+  </script>
+</body>
+</html>
