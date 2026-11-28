@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>人员管理 · 温州中学科学及幻想文学社</title>
+  <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+  <link rel="stylesheet" href="css/admin.css?v=3">
+  <style>
+    .um-tags { margin-top: 0.35rem; display: flex; gap: 0.35rem; flex-wrap: wrap; }
+    .um-tag { font-size: 0.75rem; padding: 0.05rem 0.45rem; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); }
+    .um-tag.admin { color: var(--accent); border-color: var(--accent); }
+    .um-tag.muted { color: #f59e0b; border-color: #f59e0b; }
+    .um-tag.warning { color: #fbbf24; border-color: #fbbf24; }
+    .um-tag.banned { color: #f87171; border-color: #f87171; }
+    .um-tag.pending { color: var(--accent); border-color: var(--accent); }
+    .um-tag.rejected { color: #f87171; border-color: #f87171; }
+    .um-tag.approved { color: #4ade80; border-color: #4ade80; }
+  </style>
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>人员管理</h1>
+      <div class="sub">禁言（禁止评论）、封禁（禁止登录与重新注册）、踢出（注销账户，可重新入站）、警告（开关：发出时邮件提醒，登录昵称显示 ⚠；撤销仅取消标识，不发邮件）；禁言、封禁与警告可撤销，踢出不可撤销。实名绑定为在校学生经名册自动核验的标识（学号仅显示脱敏掩码），解绑后回到待审核状态。管理员账号不受这些操作影响，仅能通过命令工具添加或移除。</div>
+    </div>
+    <div id="admin-nav"></div>
+
+    <div id="admin-root">
+      <div class="state"><div class="spinner"></div>正在加载……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=10"></script>
+  <script src="js/api.js?v=7"></script>
+  <script src="js/supabase.js?v=9"></script>
+  <script src="js/auth.js?v=16"></script>
+  <script src="js/admin.js?v=4"></script>
+  <script>
+    const FUNC_URL = `${SB.url}/functions/v1/admin-warning`;
+
+    async function callFn(url, opts = {}) {
+      const res = await fetch(url, {
+        ...opts,
+        headers: {
+          apikey: SB.anon,
+          Authorization: "Bearer " + SB.token(),
+          "Content-Type": "application/json",
+          ...(opts.headers || {}),
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `请求失败 ${res.status}`);
+      return data;
+    }
+
+    // 登录/登出后整页重建
+    window.addEventListener("sb-auth-changed", () => location.reload());
+
+    function timeLabel(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    const STATUS_NAME = { approved: "已通过", pending: "待审核", rejected: "未通过" };
+
+    (async function () {
+      const root = document.getElementById("admin-root");
+      const user = SB.user();
+      if (!user) {
+        root.innerHTML = `<div class="state"><p>请先登录管理员账号</p><p style="margin-top:1rem"><button class="btn" id="go-login" type="button">登录</button></p></div>`;
+        document.getElementById("go-login").addEventListener("click", () => window.openAuthModal("login"));
+        return;
+      }
+      const me = await window.getMyProfile();
+      if (!me || !me.is_admin) {
+        root.innerHTML = `<div class="state">你没有管理权限。</div>`;
+        return;
+      }
+
+      const stats = await window.loadTodoStats();
+      window.adminNav("admin-users.html", stats);
+
+      let rows = [];
+      let verifyMap = {};
+      async function loadRows() {
+        rows = await SB.get("profiles", "select=user_id,nickname,email,status,is_admin,muted,banned,warned,created_at&order=is_admin.desc,created_at.asc");
+        // 实名绑定信息经管理员 RPC 读取（学号仅存哈希，页面只展示脱敏掩码与姓名）
+        try {
+          const vrows = await SB.rpc("admin_list_verifications");
+          verifyMap = {};
+          (vrows || []).forEach((v) => { verifyMap[v.user_id] = v; });
+        } catch (e) { verifyMap = {}; }
+      }
+
+      try {
+        await loadRows();
+      } catch (e) {
+        root.innerHTML = `<div class="state">加载失败：${esc(e.message)}<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+        return;
+      }
+
+      function render() {
+        if (!rows.length) {
+          root.innerHTML = `<div class="state">还没有注册用户。</div>`;
+          return;
+        }
+        root.innerHTML = `
+          <div class="a-count">共 <b>${rows.length}</b> 位用户</div>
+          ${rows.map((u) => {
+            const isAdmin = !!u.is_admin;
+            const tags = [];
+            tags.push(`<span class="um-tag ${esc(u.status)}">${esc(STATUS_NAME[u.status] || u.status)}</span>`);
+            if (isAdmin) tags.push(`<span class="um-tag admin">管理员</span>`);
+            if (u.muted) tags.push(`<span class="um-tag muted">已禁言</span>`);
+            if (u.banned) tags.push(`<span class="um-tag banned">已封禁</span>`);
+            if (u.warned) tags.push(`<span class="um-tag warning">已警告</span>`);
+            return `
+              <div class="a-card" data-uid="${u.user_id}">
+                <div class="a-card-main">
+                  <div class="a-card-title">${esc(u.nickname || "（无昵称）")}</div>
+                  <div class="a-card-meta">
+                    ${verifyMap[u.user_id] ? `<span class="c-real">${esc(verifyMap[u.user_id].real_name)}（学号 ${esc(verifyMap[u.user_id].display_mask)}）</span>` : ""}
+                    <span>${esc(u.email || "")}</span>
+                    <span>注册于 ${esc(timeLabel(u.created_at))}</span>
+                  </div>
+                  <div class="um-tags">${tags.join("")}</div>
+                </div>
+                <div class="a-card-actions">
+                  ${isAdmin
+                    ? `<span class="a-count" style="margin:0">管理员账号由命令工具管理</span>`
+                    : `
+                      ${u.muted
+                        ? `<button class="a-btn ghost" type="button" data-act="unmute">解除禁言</button>`
+                        : `<button class="a-btn ghost" type="button" data-act="mute">禁言</button>`}
+                      ${u.banned
+                        ? `<button class="a-btn ghost" type="button" data-act="unban">解除封禁</button>`
+                        : `<button class="a-btn warn" type="button" data-act="ban">封禁</button>`}
+                      ${verifyMap[u.user_id] ? `<button class="a-btn ghost" type="button" data-act="unbind">解绑实名</button>` : ""}
+                      ${u.warned
+                        ? `<button class="a-btn ghost" type="button" data-act="unwarn">撤销警告</button>`
+                        : `<button class="a-btn ghost" type="button" data-act="warn">警告</button>`}
+                      <button class="a-btn danger" type="button" data-act="kick">踢出</button>`}
+                </div>
+              </div>`;
+          }).join("")}`;
+
+        root.querySelectorAll("[data-act]").forEach((btn) => {
+          const item = btn.closest(".a-card");
+          const uid = item.dataset.uid;
+          btn.addEventListener("click", () => handleAction(uid, btn.dataset.act, btn));
+        });
+      }
+
+      async function handleAction(uid, act, btn) {
+        const u = rows.find((r) => r.user_id === uid);
+        const name = u.nickname || u.email || "该用户";
+        btn.disabled = true;
+        const confirm = async (title, message, danger) =>
+          await window.adminConfirm({ title, message, danger, okText: "确定" });
+        try {
+          switch (act) {
+            case "mute":
+              if (!(await confirm(`确认禁言「${name}」？`, "禁言后无法发表评论。"))) return;
+              await SB.update("profiles", { muted: true }, `user_id=eq.${uid}`);
+              break;
+            case "unmute":
+              if (!(await confirm(`确认解除「${name}」的禁言？`, ""))) return;
+              await SB.update("profiles", { muted: false }, `user_id=eq.${uid}`);
+              break;
+            case "ban":
+              if (!(await confirm(`确认封禁「${name}」？`, "封禁后无法登录，且该邮箱无法重新注册入站。", true))) return;
+              await SB.rpc("admin_set_banned", { target_uid: uid, banned_flag: true });
+              break;
+            case "unban":
+              if (!(await confirm(`确认解除「${name}」的封禁？`, ""))) return;
+              await SB.rpc("admin_set_banned", { target_uid: uid, banned_flag: false });
+              break;
+            case "kick":
+              if (!(await confirm(`确认踢出「${name}」？`, "将注销其账户与全部数据（评论、表态、举报），此操作不可撤销；该邮箱之后可重新注册入站。", true))) return;
+              await SB.rpc("admin_delete_user", { target_uid: uid });
+              break;
+            case "unbind":
+              if (!(await confirm(`确认解除「${name}」的实名绑定？`, "解除后该用户回到待审核状态，该学号可被重新认领。", true))) return;
+              await SB.rpc("admin_unbind_student", { target_uid: uid });
+              break;
+            case "warn":
+              const reason = await window.adminPrompt({
+                title: `向「${name}」发出警告`,
+                message: "填写警告原因（将随警告邮件发送给该用户）。",
+                placeholder: "警告原因",
+                required: true,
+                okText: "发送警告",
+              });
+              if (!reason) return;
+              if (!(await confirm(`确认警告「${name}」（${u.email}）？`, "将发送警告邮件，该用户登录后昵称旁会显示 ⚠ 标识。", true))) return;
+              await callFn(FUNC_URL, { method: "POST", body: JSON.stringify({ target_uid: uid, reason }) });
+              break;
+            case "unwarn":
+              if (!(await confirm(`确认撤销对「${name}」的警告？`, "将直接取消其昵称旁的 ⚠ 标识，不发送邮件。"))) return;
+              await SB.update("profiles", { warned: false }, `user_id=eq.${uid}`);
+              break;
+          }
+          await loadRows();
+          render();
+        } catch (e) {
+          btn.disabled = false;
+          alert("操作失败：" + (e.message || "未知错误"));
+        }
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>

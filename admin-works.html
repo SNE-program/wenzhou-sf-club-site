@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>作品管理 · 温州中学科学及幻想文学社</title>
+  <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wzsf-theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css?v=23">
+  <link rel="stylesheet" href="css/admin.css?v=3">
+  <style>
+    .hub-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+    .hub-row select {
+      flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.45rem 0.6rem; color: var(--text); font-size: 0.86rem; outline: none;
+    }
+    .hub-row .a-btn { min-height: 2.2rem; padding: 0.3rem 0.9rem; font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+  <div data-nav></div>
+
+  <main class="container">
+    <div class="page-head">
+      <h1>作品管理</h1>
+      <div class="sub">管理已发布作品：下架后前台列表与文章页自动隐藏（可恢复）；删除为永久移除，不可恢复。投稿邮箱仅管理员可见，普通访客只显示笔名。</div>
+    </div>
+    <div id="admin-nav"></div>
+
+    <div id="admin-root">
+      <div class="state"><div class="spinner"></div>正在加载……</div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+
+  <script src="js/common.js?v=10"></script>
+  <script src="js/api.js?v=7"></script>
+  <script src="js/supabase.js?v=9"></script>
+  <script src="js/auth.js?v=16"></script>
+  <script src="js/admin.js?v=4"></script>
+  <script>
+    const FUNC_URL = `${SB.url}/functions/v1/works-admin`;
+
+    async function callFn(url, opts = {}) {
+      const res = await fetch(url, {
+        ...opts,
+        headers: {
+          apikey: SB.anon,
+          Authorization: "Bearer " + SB.token(),
+          "Content-Type": "application/json",
+          ...(opts.headers || {}),
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `请求失败 ${res.status}`);
+      return data;
+    }
+
+    function timeLabel(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    (async function () {
+      const root = document.getElementById("admin-root");
+      const user = SB.user();
+      if (!user) {
+        root.innerHTML = `<div class="state"><p>请先登录管理员账号</p><p style="margin-top:1rem"><button class="btn" id="go-login" type="button">登录</button></p></div>`;
+        document.getElementById("go-login").addEventListener("click", () => window.openAuthModal("login"));
+        return;
+      }
+      const me = await window.getMyProfile();
+      if (!me || !me.is_admin) {
+        root.innerHTML = `<div class="state">你没有管理权限。</div>`;
+        return;
+      }
+      const stats = await window.loadTodoStats();
+      window.adminNav("admin-works.html", stats);
+
+      let rows = [];
+      try {
+        rows = await callFn(FUNC_URL);
+      } catch (e) {
+        root.innerHTML = `<div class="state">加载失败：${esc(e.message)}<br><br><button class="btn" type="button" onclick="location.reload()">重试</button></div>`;
+        return;
+      }
+      if (!rows.length) {
+        root.innerHTML = `<div class="state">作品库为空。</div>`;
+        return;
+      }
+
+      // 中心页列表（用于「作品归属」下拉）+ 类世界观（杂文归集）
+      let hubs = [];
+      let metaWorld = null;
+      try {
+        const [h, w] = await Promise.all([
+          SB.get("hubs", "select=name,world,era&order=world.asc,sort.asc"),
+          SB.get("worlds", "select=name,kind&order=sort_order.asc").catch(() => []),
+        ]);
+        hubs = Array.isArray(h) ? h : [];
+        metaWorld = (Array.isArray(w) ? w : []).find((x) => x.kind === "meta") || null;
+      } catch (e) {
+        console.warn("读取中心页失败，归属下拉为空:", e.message);
+      }
+      function hubOptions(selected) {
+        // 类世界观：无中心页作品自动并入；保存到「所属中心页」列（保留名，读取端再归入类世界观）
+        const metaOpt = metaWorld
+          ? `<option value="${esc(metaWorld.name)}"${selected === metaWorld.name ? " selected" : ""}>（类世界观）${esc(metaWorld.name)}</option>`
+          : "";
+        return `<option value=""${selected ? "" : " selected"}>（杂文）不设中心页</option>` +
+          metaOpt +
+          hubs.map((h) => `<option value="${esc(h.name)}"${selected === h.name ? " selected" : ""}>${esc(h.name)}${h.world ? `（${esc(h.world)}${h.era ? "·" + esc(h.era) : ""}）` : ""}</option>`).join("");
+      }
+
+      function renderList() {
+        const onCount = rows.filter((w) => w.status !== "已下架").length;
+        root.innerHTML = `
+          <div class="a-count">作品 <b>${rows.length}</b> 篇 · 已上架 <b>${onCount}</b> · 已下架 <b>${rows.length - onCount}</b></div>
+          ${rows.map((w) => `
+            <div class="a-card" data-id="${esc(w.id)}">
+              <div class="a-card-main">
+                <div class="a-card-title">${esc(w.title || "（无标题）")}
+                  ${w.status === "已下架"
+                    ? `<span class="status-badge s-已结束">已下架</span>`
+                    : `<span class="status-badge s-报名中">已上架</span>`}
+                </div>
+                <div class="a-card-meta">
+                  <span>${esc(w.author || "匿名")}</span>
+                  <span class="tag-chip">${esc(Array.isArray(w.category) ? w.category.join("、") : (w.category || "未分类"))}</span>
+                  <span>${esc(timeLabel(w.created))}</span>
+                </div>
+                <div class="a-card-meta">
+                  <span>归属：${w.hub
+                    ? (metaWorld && w.hub === metaWorld.name
+                        ? `类世界观 · ${esc(w.hub)}`
+                        : esc(w.hub))
+                    : `<span style="opacity:.6">杂文（未设中心页）</span>`}</span>
+                </div>
+                <div class="a-card-meta">投稿邮箱：<span class="meta-link">${esc(w.email || "（无投稿记录）")}</span></div>
+                <div class="hub-row">
+                  <select data-hub-sel="${esc(w.id)}">${hubOptions(w.hub)}</select>
+                  <button class="a-btn" data-act="hub" data-id="${esc(w.id)}" type="button">保存归属</button>
+                </div>
+                ${w.summary ? `<div class="a-card-text">${esc(String(w.summary).slice(0, 120))}</div>` : ""}
+              </div>
+              <div class="a-card-actions">
+                ${w.status === "已下架"
+                  ? `<button class="a-btn" data-act="up" type="button">上架</button>`
+                  : `<button class="a-btn ghost" data-act="down" type="button">下架</button>`}
+                <button class="a-btn danger" data-act="delete" type="button">删除</button>
+              </div>
+            </div>`).join("")}
+          <p class="a-count" style="margin-top:1rem">下架/上架/调整归属约 5 分钟内生效（等待同步）；删除为永久移除，请谨慎操作。</p>`;
+
+        root.querySelectorAll(".a-card").forEach((item) => {
+          const id = item.dataset.id;
+          item.querySelectorAll("[data-act]").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+              const act = btn.dataset.act;
+              const w = rows.find((x) => x.id === id);
+              if (!w) return;
+              let ok = true;
+              if (act === "down") {
+                ok = await window.adminConfirm({
+                  title: `确认下架《${w.title || ""}》？`,
+                  message: "前台作品列表与文章页将隐藏，之后可随时上架恢复。",
+                  okText: "下架",
+                });
+              } else if (act === "up") {
+                ok = await window.adminConfirm({
+                  title: `确认上架《${w.title || ""}》？`,
+                  message: "上架后前台作品列表与文章页将重新显示。",
+                  okText: "上架",
+                });
+              } else if (act === "delete") {
+                ok = await window.adminConfirm({
+                  title: `确认永久删除《${w.title || ""}》？`,
+                  message: "此操作不可恢复（Notion 归档），请谨慎！",
+                  danger: true,
+                  okText: "删除",
+                });
+              }
+              if (!ok) return;
+              const btns = item.querySelectorAll("button");
+              btns.forEach((b) => (b.disabled = true));
+              try {
+                if (act === "hub") {
+                  const sel = item.querySelector(`[data-hub-sel="${id}"]`);
+                  await callFn(FUNC_URL, { method: "POST", body: JSON.stringify({ action: "set_hub", id, hub: sel ? sel.value : "" }) });
+                  w.hub = sel ? sel.value : "";
+                } else {
+                  await callFn(FUNC_URL, { method: "POST", body: JSON.stringify({ action: act, id }) });
+                  if (act === "delete") {
+                    rows = rows.filter((x) => x.id !== id);
+                    if (!rows.length) {
+                      root.innerHTML = `<div class="state">作品库已清空。</div>`;
+                      return;
+                    }
+                  } else {
+                    w.status = act === "down" ? "已下架" : "已上架";
+                  }
+                }
+                renderList();
+              } catch (e) {
+                alert("操作失败：" + e.message);
+                btns.forEach((b) => (b.disabled = false));
+              }
+            });
+          });
+        });
+      }
+
+      renderList();
+    })();
+  </script>
+</body>
+</html>
